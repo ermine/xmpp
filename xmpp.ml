@@ -97,8 +97,8 @@ print_endline (Xml.element_to_string el);
 flush Pervasives.stdout;
 	    match_tag "handshake" el;
 	    send_xml out, stream
-
-let connect logfile server port =
+	       
+let connect ?logfile server port =
    let inet_addr =
       try Unix.inet_addr_of_string server with Failure("inet_addr_of_string") ->
          (Unix.gethostbyname server).Unix.h_addr_list.(0) in
@@ -141,12 +141,12 @@ let connect logfile server port =
               let lexer = Xmlstream.parse_stream in_stream in
 		 send_raw, lexer
 
-let client ?logfile username password resource ?(port=5222) server =
-   let raw_out, lexer = connect logfile server port in
+let client ?logfile ~username ~password ~resource ?(port=5222) ~server () =
+   let raw_out, lexer = connect ?logfile server port in
       open_stream_client raw_out lexer server username password resource
 
 let service ?logfile server port username password =
-   let raw_out, lexer = connect logfile server port in
+   let raw_out, lexer = connect ?logfile server port in
       open_stream_service raw_out lexer server username password
 
 (*********)
@@ -174,6 +174,24 @@ let get_resource jid =
 	    Str.string_after jid (pos+1)
       with _ -> ""
 *)
+
+let jid_of_string str =
+   let bare_jid, resource = 
+      try
+	 let r = String.index str '/' in
+	 String.sub str 0 r,
+	 String.sub str (r+1) (String.length str - (r+1))
+      with Not_found -> str, ""
+   in
+   let user, host =
+      try
+	 let s = String.index bare_jid '@' in
+	    String.sub bare_jid 0 s,
+	    String.sub bare_jid (s+1) (String.length bare_jid - (s+1))
+      with Not_found ->
+	 "", bare_jid
+   in
+      user, host, resource
 
 let get_xmlns xml =
    let subel = List.find (function
@@ -216,6 +234,20 @@ let iq_reply ?(type_="result") xml newsubels =
            end
       | _ -> raise NonXmlelement
 
+let iq_query ?subels ?to_ ?from ?id ?type_ xmlns =
+   let attrs = 
+      (match to_ with | Some v -> [("to", v)] | None -> []) @
+	 (match from with | Some v -> [("from", v)] | None -> []) @
+	 (match id with Some v -> [("id", v)] | None -> []) @
+	 (match type_ with Some v -> [("type", v)] | None -> [("type", "get")])
+   in
+      Xmlelement ("iq", attrs,
+		  [Xmlelement ("query", ["xmlns", xmlns], 
+			       (match subels with
+				   | None -> []
+				   | Some s -> s
+			       ))])
+
 let make_presence ?(attrs=[]) ?(from="") ?(id="") ?(type_="")
    ?(status="") ?(subels=[])  to_ =
    let a = if attrs <> [] then attrs else
@@ -226,3 +258,17 @@ let make_presence ?(attrs=[]) ?(from="") ?(id="") ?(type_="")
    let s1 = if status <> "" then [make_simple_cdata "status" status] else [] in
    let s2 = if subels <> [] then subels @ s1 else s1 in
       Xmlelement ("presence", a, s2)
+
+let make_attrs_reply ?type_ attrs =
+   let to_ = try List.assoc "to" attrs with Not_found -> ""
+   and from = try List.assoc "from" attrs with Not_found -> "" in
+
+   let a1 = List.remove_assoc "to" attrs in
+   let a2 = List.remove_assoc "from" a1 in
+
+   let a3 = Xml.filter_attrs (("from", to_) :: ("to", from) :: a2) in
+      match type_ with 
+         | None -> a3
+         | Some d ->
+              let a4 = List.remove_assoc "type" a3 in
+		 if d <> "" then ("type", d) :: a4 else a4

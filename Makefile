@@ -1,6 +1,6 @@
 OCAMLMAKEFILE = ../OCamlMakefile
 
-SOURCES := xmlstream.ml auth.ml xmpp.ml
+SOURCES := xmlstream.ml auth.ml xmpp.ml jeps.ml
 THREADS := yes
 PACKS := ulex
 OCAMLLDFLAGS := -linkall -linkpkg -pack
