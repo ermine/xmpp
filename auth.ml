@@ -1,5 +1,5 @@
 (*                                                                          *)
-(* (c) 2004, Anastasia Gornostaeva. <ermine@ermine.pp.ru                    *)
+(* (c) 2004, Anastasia Gornostaeva. <ermine@ermine.pp.ru>                   *)
 (*                                                                          *)
 
 open Xml
@@ -23,7 +23,7 @@ let response_value ~username_value ~realm_value ~nonce_value ~cnonce_value
 let make_cnonce () =
    let r = Array.init 8 (fun _ -> Char.chr(Random.int 256))
    in hex (Array.fold_left (fun a b -> a ^ (String.make 1 b)) "" r);;
-
+(*
 let get_pairs data =
    let r = Str.regexp "\\(.+\\)=\"?\\([^\"]*\\)\"?" in
    List.map (function x ->
@@ -32,6 +32,29 @@ let get_pairs data =
                     (Str.matched_group 1 x, Str.matched_group 2 x)
                  with _ -> failwith x))
       (Str.split (Str.regexp ",") data)
+*)
+let get_pairs str =
+   let rec cycle data acc =
+      let eq = String.index data '=' in
+      let key = String.sub data 0 eq in
+      let value, e =
+	 if String.get data (eq+1) = '"' then
+	    let q = String.index_from data (eq+2) '"' in
+	       (String.sub data (eq+2) (q - (eq+2))), (q+1)
+	 else
+	    try 
+	       let comma = String.index data ',' in
+		  (String.sub data (eq+1) (comma - (eq+1))), (comma)
+	    with Not_found -> 
+	       (String.sub data (eq+1) (String.length data - (eq+1))), 
+	       (String.length data)
+      in 
+      if e = String.length data then (key, value) :: acc
+      else
+	 let substr = String.sub data (e+1) (String.length data - (e+1)) in 
+	    cycle substr ((key, value) :: acc)
+   in 
+      cycle str []
 
 let sasl_digest_response chl username server password =
 

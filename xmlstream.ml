@@ -1,7 +1,7 @@
 (*pp camlp4o pa_o.cmo pa_op.cmo pr_dump.cmo -I /usr/local/lib/ocaml/site-lib/ulex pa_ulex.cma *)
 
 (*                                                                          *)
-(* (c) 2004, Anastasia Gornostaeva. <ermine@ermine.pp.ru                    *)
+(* (c) 2004, Anastasia Gornostaeva. <ermine@ermine.pp.ru>                   *)
 (*                                                                          *)
 
 open Xml
@@ -45,8 +45,14 @@ let rec stream = lexer
 	      parse_error  "No attrs or features" "Invalud XML"
 	   else
 	      Element 
-		 (Xmlelement ("stream:stream", attrs, 
+		 (Xmlelement ("stream:stream", attrs, []))
+(*
 			      [stream_features lexbuf]))
+*)
+   | "<stream:features" space* '>' ->
+	Element 
+	   (Xmlelement ("stream:features", [], 
+			elements "stream:features" [] lexbuf))
 
    | "<stream:error>" ->
 	StreamError (elements "stream:error" [] lexbuf)
@@ -63,14 +69,14 @@ let rec stream = lexer
 	   Element el
    | _ -> 
 	parse_error (Ulexing.utf8_lexeme lexbuf) "Invalid XML [stream]"
-
+(*
 and stream_features = lexer 
    | space* "<stream:features" space* '>' ->
 	Xmlelement ("stream:features", [], elements "stream:features" [] lexbuf)
    | _ -> 
 	parse_error (Ulexing.utf8_lexeme lexbuf) 
 	    "Invalid XMPP [stream_features]"
-
+*)
 and element = lexer
    | name ->
 	let tag = Ulexing.utf8_lexeme lexbuf in
@@ -114,8 +120,8 @@ and xmldecl attrs = lexer
 		 if empty || attrs == [] then
 		    parse_error (Ulexing.utf8_lexeme lexbuf) "Invalud XML"
 		 else
-		    Xmlelement ("stream:stream", attrs, 
-				[stream_features lexbuf])
+		    Xmlelement ("stream:stream", attrs, [])
+				   (* [stream_features lexbuf]) *)
 	   else parse_error (Ulexing.utf8_lexeme lexbuf) 
 	      (Printf.sprintf "Invalid encoding %s"
 				       (List.assoc "encoding" attrs))

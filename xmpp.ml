@@ -1,5 +1,5 @@
 (*                                                                          *)
-(* (c) 2004, Anastasia Gornostaeva. <ermine@ermine.pp.ru                    *)
+(* (c) 2004, Anastasia Gornostaeva. <ermine@ermine.pp.ru>                   *)
 (*                                                                          *)
 
 open Xmlstream
@@ -12,9 +12,18 @@ let send_xml out (el:element) = out (Xml.element_to_string el)
 let close_stream out =
    out "</stream:stream>"
 
-let start_stream server =
+type stream_t = Client | ComponentAccept | ComponentConnect
+
+let start_stream ?streamtype server =
    "<?xml version='1.0' ?><stream:stream version='1.0' to='" ^ server ^
-   "' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams'>"
+      "' xmlns='" ^ 
+      (match streamtype with
+	 | None -> "jabber:client"
+	 | Some t -> match t with
+	      | Client -> "jabber:client"
+	      | ComponentAccept -> "jabber:component:accept"
+	      | ComponentConnect -> "jabber:component:connect")
+   ^ "' xmlns:stream='http://etherx.jabber.org/streams'>"
 
 let open_stream_client out lexer server username password resource =
    out (start_stream server);
@@ -24,101 +33,147 @@ let open_stream_client out lexer server username password resource =
 	 | StreamError els -> failwith "stream error"
 	 | StreamEnd -> failwith "stream end"
    in
-   let el =  stream () in
-      match_tag "stream:stream" el;
-      let mechanisms = Xml.get_tag el ["stream:features"; "mechanisms"] in
-      let mels = Xml.get_subels ~tag:"mechanism" mechanisms in
-      let m = List.map (function x -> Xml.get_cdata x) mels in
-         Auth.sasl_auth m (send_xml out) server username password stream;
-         out (start_stream server);
-	 let el = stream () in
-	    match_tag "stream:stream" el;
-	    let bind = Xml.get_tag el ["stream:features"; "bind"] in
-	       send_xml out 
-		  (Xmlelement ("iq", ["type", "set";
-				      "to", server; "id", "bind1"],
-			       [Xmlelement ("bind",
-				   ["xmlns","urn:ietf:params:xml:ns:xmpp-bind"],
-				       [make_simple_cdata "resource" 
-					   resource])]));
-	       let el = stream () in
-		  if match_xml el "iq" ["type", "result"; "id", "bind1"] then
-		     let myjid = get_cdata ~path:["bind";"jid"] el in
-			send_xml out
-			   (Xmlelement ("iq", ["from", myjid; "type", "set";
-					       "id", "session1"],
-					[Xmlelement ("session", 
-						     ["xmlns",
+   let el =  stream () in match_tag "stream:stream" el;
+      let el = stream () in match_tag "stream:features" el;
+	 let mechanisms = Xml.get_tag el ["mechanisms"] in
+	 let mels = Xml.get_subels ~tag:"mechanism" mechanisms in
+	 let m = List.map (function x -> Xml.get_cdata x) mels in
+            Auth.sasl_auth m (send_xml out) server username password stream;
+            out (start_stream server);
+	    let el = stream () in match_tag "stream:stream" el;
+	       let el = stream () in match_tag "stream:features" el;
+		  let bind = Xml.get_tag el ["bind"] in
+		     send_xml out 
+			(Xmlelement ("iq", ["type", "set";
+					    "to", server; "id", "bind1"],
+				     [Xmlelement ("bind",
+					["xmlns",
+					 "urn:ietf:params:xml:ns:xmpp-bind"],
+					[make_simple_cdata "resource" 
+					    resource])]));
+		     let el = stream () in
+			if match_xml el "iq" 
+			   ["type", "result"; "id", "bind1"] then
+			      let myjid = get_cdata ~path:["bind";"jid"] el in
+				 send_xml out
+				    (Xmlelement ("iq", 
+						 ["from", myjid; "type", "set";
+						  "id", "session1"],
+						 [Xmlelement ("session", 
+							      ["xmlns",
 				         "urn:ietf:params:xml:ns:xmpp-session"],
-						     [])]));
-			let el = stream () in
-			   if match_xml el "iq" ["type", "result"; 
-						 "id","session1"] then
-			      (myjid, send_xml out, stream)
-			   else
-			      raise (XMPPError "Session binding failed")
-		  else
-		     raise (XMPPError "Resource binding failed")
+							      [])]));
+				 let el = stream () in
+				    if match_xml el "iq" ["type", "result"; 
+							  "id","session1"] then
+				       (myjid, send_xml out, stream)
+				    else
+				       raise 
+					  (XMPPError "Session binding failed")
+			else
+			   raise (XMPPError "Resource binding failed")
 
-let connect server port logfile =
+let open_stream_service out lexer server name password =
+   let stream () =
+      match lexer () with
+	 | Element el -> el
+	 | StreamError els -> failwith "stream error"
+	 | StreamEnd -> failwith "stream end"
+   in
+   out (start_stream ~streamtype:ComponentAccept server);
+
+   let el =  stream () in
+print_endline (Xml.element_to_string el);
+flush Pervasives.stdout;
+      match_tag "stream:stream" el;
+      let id = get_attr_s el "id" in
+      let hashval = 
+	 Cryptokit.hash_string (Cryptokit.Hash.sha1 ()) (id ^ password) in
+      let hashtxt = 
+	 Cryptokit.transform_string (Cryptokit.Hexa.encode ()) hashval in
+	 out ("<handshake>" ^ hashtxt ^ "</handshake>");
+	 let el = stream () in
+print_endline (Xml.element_to_string el);
+flush Pervasives.stdout;
+	    match_tag "handshake" el;
+	    send_xml out, stream
+
+let connect logfile server port =
    let inet_addr =
       try Unix.inet_addr_of_string server with Failure("inet_addr_of_string") ->
          (Unix.gethostbyname server).Unix.h_addr_list.(0) in
    let sock_addr = Unix.ADDR_INET (inet_addr, port) in
    let in_stream, out_stream = Unix.open_connection sock_addr in
-      if logfile <> "" then
-         let f1, f2 = Unix.pipe () in
-         let out_pipe = Unix.out_channel_of_descr f1 in
-         let in_pipe = Unix.in_channel_of_descr f2 in
-         let logfd = open_out_gen [Open_creat; Open_append] 0o666  logfile in
-         let send_raw raw =
-            Printf.fprintf logfd "OUT: %s\n" raw;
-            flush logfd;
-            output_string out_stream raw;
-            flush out_stream
-         in
-         let rec debug_proxy () =
-            (try
-		let str = String.create 8192 in
-		let size = input in_stream str 0 8192 in
-		   if size = 0 then raise End_of_file;
-		   let data = (String.sub str 0 size) in
-                      Printf.fprintf logfd "IN: %s\n" data;
-                      flush logfd;
-                      output_string out_pipe data;
-                      flush out_pipe;
-             with exn -> close_out logfd; 
-		raise exn);
-            debug_proxy ()
-         in
-         let t = Thread.create debug_proxy () in
-         let lexer = Xmlstream.parse_stream in_pipe in
-            send_raw, lexer
-      else
-         let send_raw text =
-            output_string out_stream text;
-            flush out_stream
-         in
-         let lexer = Xmlstream.parse_stream in_stream in
-            send_raw, lexer
+      match logfile with
+	 | Some file ->
+              let f1, f2 = Unix.pipe () in
+              let out_pipe = Unix.out_channel_of_descr f1 in
+              let in_pipe = Unix.in_channel_of_descr f2 in
+              let logfd = open_out_gen [Open_creat; Open_append] 0o666  file in
+              let send_raw raw =
+		 Printf.fprintf logfd "OUT: %s\n" raw;
+		 flush logfd;
+		 output_string out_stream raw;
+		 flush out_stream
+              in
+              let rec debug_proxy () =
+		 (try
+		     let str = String.create 8192 in
+		     let size = input in_stream str 0 8192 in
+			if size = 0 then raise End_of_file;
+			let data = (String.sub str 0 size) in
+			   Printf.fprintf logfd "IN: %s\n" data;
+			   flush logfd;
+			   output_string out_pipe data;
+			   flush out_pipe;
+		  with exn -> close_out logfd; 
+		     raise exn);
+		 debug_proxy ()
+              in
+              let t = Thread.create debug_proxy () in
+              let lexer = Xmlstream.parse_stream in_pipe in
+		 send_raw, lexer
+	 | None ->
+              let send_raw text =
+		 output_string out_stream text;
+		 flush out_stream
+              in
+              let lexer = Xmlstream.parse_stream in_stream in
+		 send_raw, lexer
 
-let client username password resource ?(port=5222) ?(logfile="") server =
-   let raw_out, lexer = connect server port logfile in
+let client ?logfile username password resource ?(port=5222) server =
+   let raw_out, lexer = connect logfile server port in
       open_stream_client raw_out lexer server username password resource
+
+let service ?logfile server port username password =
+   let raw_out, lexer = connect logfile server port in
+      open_stream_service raw_out lexer server username password
 
 (*********)
 
-let get_bare_jid jid =   
+let get_bare_jid (jid:string) =
+   try
+      String.sub jid 0 (String.index jid '/')
+   with Not_found -> jid
+
+(*
    let r = Str.regexp "\\(\\(.+@\\)?[^/]+\\)\\(/.+\\)?"; in
    let t = Str.string_match r jid 0 in
       (* Strings.tolower ( *) Str.matched_group 1 jid (* ) *)
+*)
 
 let get_resource jid =
+   try 
+      let r = String.index jid '/' in
+	 String.sub jid (r+1) (String.length jid - (r+1))
+   with Not_found -> ""
+(*
    let r = Str.regexp "/" in
       try
 	 let pos = Str.search_forward r jid 0 in
 	    Str.string_after jid (pos+1)
       with _ -> ""
+*)
 
 let get_xmlns xml =
    let subel = List.find (function
