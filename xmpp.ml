@@ -1,3 +1,7 @@
+(*                                                                          *)
+(* (c) 2004, Anastasia Gornostaeva. <ermine@ermine.pp.ru                    *)
+(*                                                                          *)
+
 open Xmlstream
 open Xml
 

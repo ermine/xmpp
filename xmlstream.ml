@@ -1,5 +1,9 @@
 (*pp camlp4o pa_o.cmo pa_op.cmo pr_dump.cmo -I /usr/local/lib/ocaml/site-lib/ulex pa_ulex.cma *)
 
+(*                                                                          *)
+(* (c) 2004, Anastasia Gornostaeva. <ermine@ermine.pp.ru                    *)
+(*                                                                          *)
+
 open Xml
 
 let regexp space = ' ' | '\n' | '\t' | '\r'
