@@ -25,10 +25,10 @@ let start_stream ?streamtype server =
 	      | ComponentConnect -> "jabber:component:connect")
    ^ "' xmlns:stream='http://etherx.jabber.org/streams'>"
 
-let open_stream_client out lexer server username password resource =
+let open_stream_client out next_xml server username password resource =
    out (start_stream server);
    let stream () =
-      match lexer () with
+      match next_xml () with
 	 | Element el -> el
 	 | StreamError els -> failwith "stream error"
 	 | StreamEnd -> failwith "stream end"
@@ -73,9 +73,9 @@ let open_stream_client out lexer server username password resource =
 			else
 			   raise (XMPPError "Resource binding failed")
 
-let open_stream_service out lexer server name password =
+let open_stream_service out next_xml server name password =
    let stream () =
-      match lexer () with
+      match next_xml () with
 	 | Element el -> el
 	 | StreamError els -> failwith "stream error"
 	 | StreamEnd -> failwith "stream end"
@@ -131,23 +131,23 @@ let connect ?logfile server port =
 		 debug_proxy ()
               in
               let t = Thread.create debug_proxy () in
-              let lexer = Xmlstream.parse_stream in_pipe in
-		 send_raw, lexer
+              let next_xml = Xmlstream.parse_stream in_pipe in
+		 send_raw, next_xml
 	 | None ->
               let send_raw text =
 		 output_string out_stream text;
 		 flush out_stream
               in
-              let lexer = Xmlstream.parse_stream in_stream in
-		 send_raw, lexer
+              let next_xml = Xmlstream.parse_stream in_stream in
+		 send_raw, next_xml
 
 let client ?logfile ~username ~password ~resource ?(port=5222) ~server () =
-   let raw_out, lexer = connect ?logfile server port in
-      open_stream_client raw_out lexer server username password resource
+   let raw_out, next_xml = connect ?logfile server port in
+      open_stream_client raw_out next_xml server username password resource
 
 let service ?logfile server port username password =
-   let raw_out, lexer = connect ?logfile server port in
-      open_stream_service raw_out lexer server username password
+   let raw_out, next_xml = connect ?logfile server port in
+      open_stream_service raw_out next_xml server username password
 
 (*********)
 
