@@ -164,23 +164,25 @@ and attvalue = lexer
 	parse_error (Ulexing.utf8_lexeme lexbuf) "No quotes"
 
 and attvalue_quot value = lexer
-   | ([^"<&\""] | ent)* ->
+   | ([^ "<&\""] | ent)* ->
 	attvalue_quot (value ^ (Ulexing.utf8_lexeme lexbuf)) lexbuf
    | "\"" -> 
 	value
    | _ -> 
-	parse_error (Ulexing.utf8_lexeme lexbuf) "Not expected here"
+	parse_error (Ulexing.utf8_lexeme lexbuf) 
+	   "Not expected in attribute value"
 
 and attvalue_apos value = lexer
-   | ([^"<&'"] | ent)* ->
+   | ([^"<&\'"] | ent)* ->
 	attvalue_apos (value ^ (Ulexing.utf8_lexeme lexbuf)) lexbuf
    | "'" -> 
 	value
    | _ -> 
-	parse_error (Ulexing.utf8_lexeme lexbuf) "Not expected here"
+	parse_error (Ulexing.utf8_lexeme lexbuf) 
+	   "Not expected in attrvalue value"
 
 and cdata = lexer
-   | ([^"'<&"] | ent)* -> 
+   | ([^"<&"] | ent)* -> 
 	Ulexing.utf8_lexeme lexbuf
    | any ->
 	parse_error (Ulexing.utf8_lexeme lexbuf) "Invalid XML [cdata]"
