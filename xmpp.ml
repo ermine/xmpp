@@ -107,8 +107,8 @@ let connect ?logfile server port =
       match logfile with
 	 | Some file ->
               let f1, f2 = Unix.pipe () in
-              let out_pipe = Unix.out_channel_of_descr f1 in
-              let in_pipe = Unix.in_channel_of_descr f2 in
+              let out_pipe = Unix.out_channel_of_descr f2 in
+              let in_pipe = Unix.in_channel_of_descr f1 in
               let logfd = open_out_gen [Open_creat; Open_append] 0o666  file in
               let send_raw raw =
 		 Printf.fprintf logfd "OUT: %s\n" raw;
