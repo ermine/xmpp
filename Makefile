@@ -1,16 +1,17 @@
 OCAMLMAKEFILE = ../OCamlMakefile
 
-SOURCES := xmlstream.ml auth.ml xmpp.ml jeps.ml
-THREADS := yes
-PACKS := ulex
-OCAMLLDFLAGS := -linkall -linkpkg -pack
-OCAMLFLAGS := nums.cmxa cryptokit.cmxa -I ../xml xml.cmxa
-#OCAMLLDFLAGS := nums.cmxa cryptokit.cmxa ../xml/xml.cmxa
+SOURCES         = auth.ml xmpp.ml jeps.ml
+THREADS         = yes
+PACKS           = ulex
+OCAMLFLAGS      = nums.cmxa cryptokit.cmxa -I ../xml xml.cmxa
+OCAMLLDFLAGS    = xmlstream.cmx -linkall -linkpkg -pack
  
-RESULT := xmpp
+RESULT          = xmpp
 
-all: native-code-library
-#all: native-code
+all: ncl
+
+xmlstream.cmx: xmlstream.ml
+	ocamlfind opt -I ../xml -package ulex,camlp4 -syntax camlp4o -c xmlstream.ml
 
 
 include $(OCAMLMAKEFILE)
