@@ -13,9 +13,5 @@ RESULT        = xmpp
 
 all: ncl
 
-#xmlstream.cmx: xmlstream.ml
-#	ocamlfind opt -I ../xml -package ulex,camlp4 -syntax camlp4o -c xmlstream.ml
-
-
 include $(OCAMLMAKEFILE)
 
