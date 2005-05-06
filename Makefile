@@ -1,6 +1,6 @@
 OCAMLMAKEFILE = ../OCamlMakefile
 
-SOURCES       = xmlstream.ml auth.ml xmpp.ml jeps.ml
+SOURCES       = xmlstream.ml auth.ml xmpp.ml error.ml jeps.ml
 THREADS       = yes
 USE_CAMLP4    = yes
 PACKS         = ulex

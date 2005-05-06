@@ -19,9 +19,34 @@ let iq_version_reply name version xml out =
            ])
 
 
+type x_data_type = [
+| `BOOLEAN
+| `FIXED
+| `HIDDEN
+| `JID_MULTI
+| `JID_SINGLE
+| `LIST_MULTI
+| `LIST_SINGLE
+| `TEXT_MULTI
+| `TEXT_PRIVATE
+| `TEXT_SINGLE
+]
 let make_x_data_field ?(label="") ?(var="")
-   ?(value="") ?(required=false) ?options type_ =
-   let a1 = [("type", type_)] in
+      ?(value="") ?(required=false) ?options (type_:x_data_type) =
+
+   let a1 = [("type", 
+	      match type_ with
+		 | `BOOLEAN -> "boolean"
+		 | `FIXED -> "fixed"
+		 | `HIDDEN -> "hidden"
+		 | `JID_MULTI -> "jid-multi"
+		 | `JID_SINGLE -> "jid-single"
+		 | `LIST_MULTI -> "list-multi"
+		 | `LIST_SINGLE -> "list-single"
+		 | `TEXT_MULTI -> "text-multi"
+		 | `TEXT_PRIVATE -> "text-private"
+		 | `TEXT_SINGLE -> "text-single"
+	     )] in
    let a2 = if label <> "" then ("label", label) :: a1 else a1 in
    let a3 = if var <> "" then ("var", var) :: a2 else a2 in
 
