@@ -156,24 +156,20 @@ let get_bare_jid (jid:string) =
       String.sub jid 0 (String.index jid '/')
    with Not_found -> jid
 
-(*
-   let r = Str.regexp "\\(\\(.+@\\)?[^/]+\\)\\(/.+\\)?"; in
-   let t = Str.string_match r jid 0 in
-      (* Strings.tolower ( *) Str.matched_group 1 jid (* ) *)
-*)
-
 let get_resource jid =
    try 
       let r = String.index jid '/' in
 	 String.sub jid (r+1) (String.length jid - (r+1))
    with Not_found -> ""
-(*
-   let r = Str.regexp "/" in
-      try
-	 let pos = Str.search_forward r jid 0 in
-	    Str.string_after jid (pos+1)
-      with _ -> ""
-*)
+
+type jid = {
+   user: string;
+   luser: string;
+   server: string;
+   lserver: string;
+   resource: string;
+   lresource: string
+}
 
 let jid_of_string str =
    let bare_jid, resource = 
@@ -191,7 +187,45 @@ let jid_of_string str =
       with Not_found ->
 	 "", bare_jid
    in
-      user, host, resource
+      {
+	 user = user;
+	 server = host;
+	 resource = resource;
+	 luser = Stringprep.nameprep user;
+	 lserver = Stringprep.nodeprep host; 
+	 lresource = Stringprep.resourceprep resource
+      }
+
+let safe_jid_of_string str =
+   let bare_jid, resource = 
+      try
+	 let r = String.index str '/' in
+	 String.sub str 0 r,
+	 String.sub str (r+1) (String.length str - (r+1))
+      with Not_found -> str, ""
+   in
+   let user, host =
+      try
+	 let s = String.index bare_jid '@' in
+	    String.sub bare_jid 0 s,
+	    String.sub bare_jid (s+1) (String.length bare_jid - (s+1))
+      with Not_found ->
+	 "", bare_jid
+   in
+      {
+	 user = user;
+	 server = host;
+	 resource = resource;
+	 luser = (try Stringprep.nameprep user with _ -> user);
+	 lserver = (try Stringprep.nodeprep host with _ -> host);
+	 lresource = (try Stringprep.resourceprep resource with _ -> resource);
+      }
+
+let string_of_jid (jid:jid) =
+   if jid.resource <> "" then
+      String.concat "" [jid.user; "@"; jid.server; "/"; jid.resource]
+   else
+      String.concat "" [jid.user; "@"; jid.server]
 
 let get_xmlns xml =
    let subel = List.find (function

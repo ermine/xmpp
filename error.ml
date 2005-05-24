@@ -4,6 +4,8 @@
 open Xmpp
 open Xml
 
+exception UnknownError
+
 type error = [
 | `ERR_BAD_REQUEST
 | `ERR_CONFLICT
@@ -27,6 +29,14 @@ type error = [
 | `ERR_SUBSCRIPTION_REQUIRED
 | `ERR_UNDEFINED_CONDITION
 | `ERR_UNEXPECTED_REQUEST
+]
+
+type error_type = [
+| `Cancel
+| `Continue
+| `Modify
+| `Auth
+| `Wait
 ]
 
 let error_to_tuple (err:error) =
@@ -96,6 +106,70 @@ let code_to_error code =
       | "504" -> `ERR_REMOTE_SERVER_TIMEOUT
       | "510" -> `ERR_SERVICE_UNAVAILABLE
       | _ -> `ERR_UNDEFINED_CONDITION
+
+let cond_to_error cond =
+   match cond with
+      | "bad-request" -> `ERR_BAD_REQUEST
+      | "conflict" -> `ERR_CONFLICT
+      | "feature-not-implemented" ->`ERR_FEATURE_NOT_IMPLEMENTED
+      | "forbidden" -> `ERR_FORRBIDEN
+      | "gone" -> `ERR_GONE
+      | "internal-server-error" -> `ERR_INTERNAL_SERVER_ERROR
+      | "item-not-found" -> `ERR_ITEM_NOT_FOUND
+      | "jid-malformed" -> `ERR_JID_MALFORMED
+      | "not-acceptable" -> `ERR_NOT_ACCEPTABLE
+      | "not-allowed" -> `ERR_NOT_ALLOWED
+      | "not-authorized" -> `ERR_NOT_AUTHORIZED
+      | "payment-required" -> `ERR_PAYMENT_REQUIRED
+      | "recipient-unavailable" -> `ERR_RECIPIENT_UNAVAILABLE
+      | "redirect" -> `ERR_REDIRECT
+      | "registration-required" -> `ERR_REGISTRATION_REQUIRED
+      | "remote-server-not-found" -> `ERR_REMOTE_SERVER_NOT_FOUND
+      | "remote-server-timeout" -> `ERR_REMOTE_SERVER_TIMEOUT
+      | "resource-constraint" -> `ERR_RESOURCE_CONSTRAINT
+      | "service-unavailable" -> `ERR_SERVICE_UNAVAILABLE
+      | "subscription-required" -> `ERR_SUBSCRIPTION_REQUIRED
+      | "undefuned-condition" -> `ERR_UNDEFINED_CONDITION
+      | "unexpected-request" -> `ERR_UNEXPECTED_REQUEST
+      | _ -> raise UnknownError
+
+let parse_error stanza =
+   let err = Xml.get_tag stanza ["error"] in
+   let type_ =
+      match try Xml.get_attr_s err "type" with _ -> "" with
+	 | "cancel" -> `Cancel
+	 | "continue" -> `Continue
+	 | "modify" -> `Modify
+	 | "auth" -> `Auth
+	 | "wait" -> `Wait
+	 | _ -> `Cancel
+   in
+   let cond = ref `ERR_UNDEFINED_CONDITION in
+   let text = ref "" in
+      List.iter (function x ->
+		    match x with
+		       | Xmlelement (name, attrs, els) ->
+			    begin
+			       if List.assoc "xmlns" attrs = 
+				  "urn:ietf:params:xml:ns:xmpp-stanzas" then
+				     try 
+					cond := cond_to_error name 
+				     with UnknownError ->
+					match name with
+					   | "text" -> text := get_cdata x
+					   | _ -> ()
+			    end
+		       | _ -> ()
+		) (get_subels err);
+      begin
+	 try
+	    if !cond = `ERR_UNDEFINED_ERROR then
+	       let code = get_attr_s err "code" in
+		  cond := code_to_error code
+	 with _ -> ()
+      end;
+      !cond, type_, !text
+
 
 let make_error_reply (xml:Xml.element) ?(descr:string option) (error:error) =
    let code, err_type, cond = error_to_tuple error in
