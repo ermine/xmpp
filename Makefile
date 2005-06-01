@@ -1,9 +1,5 @@
 OCAMLMAKEFILE = ../OCamlMakefile
 
-#._d/xmlstream.d:
-#	ocamlfind ocamldep -package ulex -syntax camlp4o xmlstream.ml
-
-
 SOURCES       = uni_data.ml uni_norm.ml stringprep.ml \
 		auth.ml xmpp.ml error.ml jeps.ml
 PRE_TARGETS   = xmlstream.cmx
@@ -20,7 +16,7 @@ RESULT         = xmpp
 all: ncl
 
 xmlstream.cmx: xmlstream.ml
-	ocamlfind ocamlopt -syntax camlp4o -I ../xml -package ulex -linkpkg xmlstream.ml
+	ocamlfind ocamlopt -syntax camlp4o -I ../xml -package ulex -linkpkg -c xmlstream.ml
 
 include $(OCAMLMAKEFILE)
 
