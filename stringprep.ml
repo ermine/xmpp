@@ -336,7 +336,7 @@ let nameprep str =
    if str <> "" then 
       try stringprep ~mode:Nameprep str 
       with exn ->
-	 print_endline "exception in nameprep";
+	 Printf.eprintf "exception in nameprep: %s\n" str;
 	 raise exn
    else ""
 
@@ -345,7 +345,7 @@ let nodeprep str =
       try
 	 stringprep ~mode:Nodeprep str 
       with exn ->
-	 print_endline "exception in nodeprep";
+	 Printf.eprintf "exception in nodeprep: %s\n" str;
 	 raise exn
    else ""
 
@@ -354,6 +354,6 @@ let resourceprep str =
       try
 	 stringprep ~mode:Resourceprep str
       with exn ->
-	 print_endline "exception in resourceprep";
+	 Printf.eprintf "exception in resourceprep:%s\n" str;
 	 raise exn
    else ""
