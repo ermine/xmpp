@@ -6,6 +6,8 @@ open Xmlstream
 open Xml
 
 exception XMPPError of string
+exception XMPPStreamEnd
+exception XMPPStreamError of Xml.element list
 
 let send_xml out (el:element) = out (Xml.element_to_string el)
 
@@ -30,8 +32,8 @@ let open_stream_client out next_xml server username password resource =
    let stream () =
       match next_xml () with
 	 | Element el -> el
-	 | StreamError els -> failwith "stream error"
-	 | StreamEnd -> failwith "stream end"
+	 | StreamError els -> raise (XMPPStreamError els)
+	 | StreamEnd -> raise XMPPStreamEnd
    in
    let el =  stream () in match_tag "stream:stream" el;
       let el = stream () in match_tag "stream:features" el;
@@ -117,18 +119,19 @@ let connect ?logfile server port =
 		 flush out_stream
               in
               let rec debug_proxy () =
-		 (try
-		     let str = String.create 8192 in
-		     let size = input in_stream str 0 8192 in
-			if size = 0 then raise End_of_file;
-			let data = (String.sub str 0 size) in
-			   Printf.fprintf logfd "IN: %s\n" data;
-			   flush logfd;
-			   output_string out_pipe data;
-			   flush out_pipe;
-		  with exn -> close_out logfd; 
-		     raise exn);
-		 debug_proxy ()
+		 let str = String.create 8192 in
+		 let size = input in_stream str 0 8192 in
+		    if size = 0 then begin
+		       close_out logfd;
+		       close_out out_pipe;
+		       Thread.exit ()
+		    end;
+		    let data = (String.sub str 0 size) in
+		       Printf.fprintf logfd "IN: %s\n" data;
+		       flush logfd;
+		       output_string out_pipe data;
+		       flush out_pipe;
+		       debug_proxy ()
               in
               let t = Thread.create debug_proxy () in
               let next_xml = Xmlstream.parse_stream in_pipe in

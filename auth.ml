@@ -4,6 +4,7 @@
 
 open Xml
 
+exception AuthCreateError of string
 exception AuthError
 
 let h s = Cryptokit.hash_string (Cryptokit.Hash.md5 ()) s
@@ -23,16 +24,7 @@ let response_value ~username_value ~realm_value ~nonce_value ~cnonce_value
 let make_cnonce () =
    let r = Array.init 8 (fun _ -> Char.chr(Random.int 256))
    in hex (Array.fold_left (fun a b -> a ^ (String.make 1 b)) "" r);;
-(*
-let get_pairs data =
-   let r = Str.regexp "\\(.+\\)=\"?\\([^\"]*\\)\"?" in
-   List.map (function x ->
-                (try
-                    ignore (Str.string_match r x 0);
-                    (Str.matched_group 1 x, Str.matched_group 2 x)
-                 with _ -> failwith x))
-      (Str.split (Str.regexp ",") data)
-*)
+
 let get_pairs str =
    let rec cycle data acc =
       let eq = String.index data '=' in
@@ -97,14 +89,18 @@ let sasl_digest out server username password next_xml =
 			  ["xmlns", "urn:ietf:params:xml:ns:xmpp-sasl"],
 			  [Xmlcdata resp]));
 	 let chl = next_xml () in
-	    match_tag "challenge" chl;
-	    let chl_text = Xml.get_cdata chl in
-	       sasl_digest_rspauth chl_text;
-	       out (Xmlelement 
-		       ("response",
-			["xmlns", "urn:ietf:params:xml:ns:xmpp-sasl"], []));
-	       let succ = next_xml () in
-		  match_tag "success" succ
+	    match Xml.get_tagname chl with
+	       | "failure" ->
+		    raise AuthError
+	       | "challenge" ->
+		    let chl_text = Xml.get_cdata chl in
+		       sasl_digest_rspauth chl_text;
+		       out (Xmlelement 
+			       ("response",
+				["xmlns", "urn:ietf:params:xml:ns:xmpp-sasl"], 
+				[]));
+		       let succ = next_xml () in
+			  match_tag "success" succ
 					  
 let sasl_auth mechanisms out server username password next_xml =
    if List.mem "DIGEST-MD5" mechanisms then
