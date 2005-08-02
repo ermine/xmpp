@@ -10,7 +10,7 @@ type error = [
 | `ERR_BAD_REQUEST
 | `ERR_CONFLICT
 | `ERR_FEATURE_NOT_IMPLEMENTED
-| `ERR_FORRBIDEN
+| `ERR_FORBIDDEN
 | `ERR_GONE
 | `ERR_INTERNAL_SERVER_ERROR
 | `ERR_ITEM_NOT_FOUND
@@ -47,7 +47,7 @@ let error_to_tuple (err:error) =
 	   "409", "cancel", "conflict"
       | `ERR_FEATURE_NOT_IMPLEMENTED -> 
 	   "501", "cancel", "feature-not-implemented"
-      | `ERR_FORRBIDEN -> 
+      | `ERR_FORBIDDEN -> 
 	   "403", "auth", "forbidden"
       | `ERR_GONE -> 
 	   "302", "modify", "gone"
@@ -112,7 +112,7 @@ let cond_to_error cond =
       | "bad-request" -> `ERR_BAD_REQUEST
       | "conflict" -> `ERR_CONFLICT
       | "feature-not-implemented" ->`ERR_FEATURE_NOT_IMPLEMENTED
-      | "forbidden" -> `ERR_FORRBIDEN
+      | "forbidden" -> `ERR_FORBIDDEN
       | "gone" -> `ERR_GONE
       | "internal-server-error" -> `ERR_INTERNAL_SERVER_ERROR
       | "item-not-found" -> `ERR_ITEM_NOT_FOUND

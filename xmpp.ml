@@ -8,6 +8,7 @@ open Xml
 exception XMPPError of string
 exception XMPPStreamEnd
 exception XMPPStreamError of Xml.element list
+exception InvalidStanza
 
 let send_xml out (el:element) = out (Xml.element_to_string el)
 
@@ -79,26 +80,21 @@ let open_stream_service out next_xml server name password =
    let stream () =
       match next_xml () with
 	 | Element el -> el
-	 | StreamError els -> failwith "stream error"
-	 | StreamEnd -> failwith "stream end"
+	 | StreamError els -> raise (XMPPStreamError els)
+	 | StreamEnd -> raise XMPPStreamEnd
    in
    out (start_stream ~streamtype:ComponentAccept server);
-
-   let el =  stream () in
-print_endline (Xml.element_to_string el);
-flush Pervasives.stdout;
-      match_tag "stream:stream" el;
-      let id = get_attr_s el "id" in
-      let hashval = 
-	 Cryptokit.hash_string (Cryptokit.Hash.sha1 ()) (id ^ password) in
-      let hashtxt = 
-	 Cryptokit.transform_string (Cryptokit.Hexa.encode ()) hashval in
-	 out ("<handshake>" ^ hashtxt ^ "</handshake>");
-	 let el = stream () in
-print_endline (Xml.element_to_string el);
-flush Pervasives.stdout;
-	    match_tag "handshake" el;
-	    send_xml out, stream
+      let el =  stream () in
+	 match_tag "stream:stream" el;
+	 let id = get_attr_s el "id" in
+	 let hashval = 
+	    Cryptokit.hash_string (Cryptokit.Hash.sha1 ()) (id ^ password) in
+	 let hashtxt = 
+	    Cryptokit.transform_string (Cryptokit.Hexa.encode ()) hashval in
+	    out ("<handshake>" ^ hashtxt ^ "</handshake>");
+	    let el = stream () in
+	       match_tag "handshake" el;
+	       send_xml out, stream
 	       
 let connect ?logfile server port =
    let inet_addr =
@@ -252,49 +248,208 @@ let make_attrs_reply ?type_ attrs =
               let a5 = if d <> "" then ("type", d) :: a4 else a4 in
                  a5
 
-let iq_reply ?(type_="result") xml newsubels =
+type iq_type = [`Get | `Set | `Result | `Error]
+
+let iq_info xml =
+   let id = try get_attr_s xml "id" with Not_found -> "" in
+   let type_ = match safe_get_attr_s xml "type" with
+      | "get" -> `Get
+      | "set" -> `Set
+      | "result" -> `Result
+      | "error" -> `Error
+      | _ -> raise InvalidStanza in
+   let xmlns =
+      match type_ with
+	 | `Get
+	 | `Set -> 
+	      (let subel = List.find (fun i ->
+					 match i with
+					    | Xmlelement _ -> true
+					    | _ -> false
+				     ) (get_subels xml) in
+		  try get_attr_s subel "xmlns" with Not_found -> 
+		     raise  InvalidStanza)
+	 | `Result
+	 | `Error ->
+	      try
+		 let subel = List.find (fun i ->
+					   match i with
+					      | Xmlelement _ -> true
+					      | _ -> false
+				       ) (get_subels xml) in
+		    get_attr_s subel "xmlns"
+	      with Not_found -> ""
+   in
+      id, type_, xmlns
+		  
+let iq_reply ?type_ ?subels xml =
    match xml with
-      | Xmlelement (_, attrs, subels) ->
-           begin
-              let newattrs = make_attrs_reply attrs ~type_ in
-              let q = List.find (function
-                                    | Xmlelement (_, _, _) -> true
-                                    | Xmlcdata _ -> false
-                                ) subels in
-                 match q with
-                    | Xmlelement (qn, qa, _) ->
-                         let a = try  [("xmlns", List.assoc "xmlns" qa)]
-                         with _ -> qa in
-                            Xmlelement ("iq", newattrs,
-                                     [Xmlelement (qn, a, newsubels)])
-                    | _ -> raise NonXmlelement
-           end
+      | Xmlelement (_, attrs, subels1) ->
+           (let newattrs = make_attrs_reply attrs ?type_ in
+	       match subels with
+		  | None -> Xmlelement ("iq", newattrs, subels1)
+		  | Some news ->
+		       match List.find (function
+					   | Xmlelement _ -> true
+					   | _ -> false
+				       ) subels1 with
+			  | Xmlelement (qn, qa, _) ->
+                               Xmlelement ("iq", newattrs,
+					   [Xmlelement (qn, qa, news)])
+			  | _ -> raise NonXmlelement
+           )
       | _ -> raise NonXmlelement
 
-let iq_query ?subels ?to_ ?from ?id ?type_ xmlns =
-   let attrs = 
-      (match to_ with | Some v -> [("to", v)] | None -> []) @
-	 (match from with | Some v -> [("from", v)] | None -> []) @
-	 (match id with Some v -> [("id", v)] | None -> []) @
-	 (match type_ with Some v -> [("type", v)] | None -> [("type", "get")])
+let iq_query ?to_ ?from ?xmlns ?exattrs ?subels ?lang ~id ~type_ () =
+   let a1 = [("id", id); ("type", match type_ with
+			     | `Get -> "get"
+			     | `Set -> "set"
+			     | `Result -> "result"
+			     | `Error -> "error")] in
+   let a2 = match from with
+      | None -> a1
+      | Some f -> ["from", f] in
+   let a3 = match to_ with
+      | None -> a2
+      | Some t -> ("to", t) :: a2 in
+   let a4 = match lang with
+      | None -> a3
+      | Some l -> ("xml:lang", l) :: a3 in
+
+   let s1 = match xmlns with
+      | None -> []
+      | Some x -> [Xmlelement ("query", ("xmlns", x) :: 
+				  (match exattrs with
+				      | None -> []
+				      | Some ex -> ex),
+			       match subels with
+				  | None -> []
+				  | Some s -> s)]
+   in	   
+      Xmlelement ("iq", a4, s1)
+
+type presence_show_t = [
+| `Chat
+| `Away
+| `DND
+| `XA
+| `Online
+]
+
+type presence_t = [
+| `Probe
+| `Subscribe
+| `Subscribed
+| `Unsubscribe
+| `Unsubscribed
+| `Unavailable
+| `Available of (presence_show_t option)
+| `Error
+]
+
+let presence_info xml =
+   let t = match safe_get_attr_s xml "type" with
+      | "probe" -> `Probe
+      | "subscribe" -> `Subscribe
+      | "subscribed" -> `Subscribed
+      | "unsubscribe" -> `Unsubscribe
+      | "unsubscribed" -> `Unsubscribed
+      | "unavailable" -> `Unavailable
+      | "error" -> `Error
+      | _ ->
+           let show = 
+              match try get_cdata ~path:["show"] xml with Not_found -> "" with
+                 | "away" -> Some `Away
+                 | "xa" -> Some `XA
+                 | "dnd" -> Some `DND
+                 | "chat" -> Some `Chat
+                 | _ -> None
+           in
+	      `Available show
    in
-      Xmlelement ("iq", attrs,
-		  [Xmlelement ("query", ["xmlns", xmlns], 
-			       (match subels with
-				   | None -> []
-				   | Some s -> s
-			       ))])
+   let status = try get_cdata xml ~path:["status"] with 
+	 Not_found -> "" in
+      t, status
 
-let make_presence ?(attrs=[]) ?(from="") ?(id="") ?(type_="")
-   ?(status="") ?(subels=[])  to_ =
-   let a = if attrs <> [] then attrs else
-      Xml.filter_attrs
-         [("from", from);
-          ("to", to_); ("id", id); ("type", type_)] in
+let make_presence ?from ?to_ ?id ?type_ ?status ?subels ?lang () =
+   let a1 = match from with
+      | None -> []
+      | Some f -> ["from", f] in
+   let a2 = match to_ with
+      | None -> a1
+      | Some t -> ("to", t) :: a1 in
+   let a3 = match id with
+      | None -> a2
+      | Some i -> ("id", i) :: a2 in
+   let a4, s1 = match type_ with
+      | None -> a3, []
+      | Some p ->
+	   match p with
+	      | `Subscribe -> ("type", "subscribe") :: a3, []
+	      | `Subscribed -> ("type", "subscribed") :: a3, []
+	      | `Unsubscribe -> ("type", "unsubscribe") :: a3, []
+	      | `Unsubscribed -> ("type", "unsubscribed") :: a3, []
+	      | `Probe -> ("type", "probe") :: a3, []
+	      | `Error -> ("type", "error") :: a3, []
+	      | `Available show -> a3, 
+		   (match show  with
+		       | None -> []
+		       | Some `Chat -> [make_simple_cdata "chat" ""]
+		       | Some `DND -> [make_simple_cdata "dnd" ""]
+		       | Some `Away -> [make_simple_cdata "away" ""]
+		       | Some `XA -> [make_simple_cdata "xa" ""])
+	      | `Unavailable -> ("type", "unavailable") :: a3, [] in
+   let a5 = match lang with
+      | None -> a4
+      | Some l -> ("lang", l) :: a4 in
+   let s2 = match status with
+      | None -> s1
+      | Some s -> make_simple_cdata "status" s :: s1 in
+   let s3 = match subels with
+      | None -> s2
+      | Some s -> s2 @ s in
+      Xmlelement ("presence", a5, s3)
 
-   let s1 = if status <> "" then [make_simple_cdata "status" status] else [] in
-   let s2 = if subels <> [] then subels @ s1 else s1 in
-      Xmlelement ("presence", a, s2)
+type message_type = [
+| `Normal
+| `Chat
+| `Groupchat
+| `Headline
+| `Error
+]
+
+let make_message ?from ?to_ ?type_ ?id ?subject ?body ?subels ~lang () =
+   let a1 = match from with
+      | None -> []
+      | Some f -> ["from", f] in
+   let a2 = match to_ with
+      | None -> a1
+      | Some t -> ("to", t) :: a1 in
+   let a3 = match id with
+      | None -> a2
+      | Some i -> ("id", i) :: a2 in
+   let a4 = match type_ with
+      | None -> a3
+      | Some t -> ("type", match t with
+		      | `Normal -> "normal"
+		      | `Chat -> "chat"
+		      | `Groupchat -> "groupchat"
+		      | `Headline -> "headline"
+		      | `Error -> "error") :: a3 in
+   let a5 = match lang with
+      | None -> a4
+      | Some l -> ("lang", l) :: a4 in
+
+   let s1 = match subject with
+      | None -> []
+      | Some s -> [make_simple_cdata "subject" s] in
+   let s2 = match body with
+      | None -> s1
+      | Some b -> make_simple_cdata "body" b :: s1 in
+   let s3 = match subels with
+      | None -> s2
+      | Some s -> s2 @ s in
+      Xmlelement ("message", a5, s3)
 
 let make_attrs_reply ?type_ attrs =
    let to_ = try List.assoc "to" attrs with Not_found -> ""

@@ -1,7 +1,7 @@
 (*                                                                          *)
 (* (c) 2004, 2005 Anastasia Gornostaeva. <ermine@ermine.pp.ru>              *)
 (*                                                                          *)
-(* based on ejabberd/stringprep (c Alexey Shchepin                          *)
+(* based on ejabberd/stringprep (c) Alexey Shchepin                         *)
 
 open Uni_data
 open Uni_norm

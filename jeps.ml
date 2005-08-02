@@ -10,14 +10,13 @@ let os = (let f = open_process_in "uname -sr" in
           let answer = input_line f in
              ignore (close_process_in f); answer)
 
-let iq_version_reply name version xml out =
-   out (iq_reply xml
-           [make_simple_cdata "name" name;
-            make_simple_cdata "version"
-               (Printf.sprintf "%s (Ocaml %s)" version Sys.ocaml_version);
-            make_simple_cdata "os" os
-           ])
-
+let iq_version_reply name version xml =
+   iq_reply ~subels:[make_simple_cdata "name" name;
+		     make_simple_cdata "version"
+			(Printf.sprintf "%s (Ocaml %s)" 
+			    version Sys.ocaml_version);
+		     make_simple_cdata "os" os
+		    ] xml
 
 type x_data_type = [
 | `BOOLEAN
@@ -106,3 +105,19 @@ let make_disco_item jid ?node name =
       | Some x -> [("jid", jid); ("node", x); ("name", name)]
    in
       Xmlelement ("item", attr, [])
+
+(* JEP 54 vCard-temp *)
+
+(* "vCard" instead onf "query", so we provide full Xmlelement element  *)
+let iq_vcard_query ?from ?lang ~id to_ =
+   let a1 = [("id", id); ("to", to_); ("type", "get")] in
+   let a2 = match from with
+      | None -> a1
+      | Some f -> ("from", f) :: a1 in
+   let a3 = match lang with
+      | None -> a2
+      | Some l -> ("xml:lang", l) :: a2 
+   in
+      Xmlelement ("iq", a3, 
+		  [Xmlelement ("vCard", ["xmlns", "vcard-temp"], [])])
+      

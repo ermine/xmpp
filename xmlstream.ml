@@ -92,15 +92,15 @@ and elements tag acc = lexer
 	   if endtag = tag then 
 	      begin
 		 eat_end lexbuf;
-		 acc
+		 List.rev acc
 	      end
 	   else
 	      parse_error (Ulexing.utf8_lexeme lexbuf) "Invalid XML [elements]"
    | '<' ->
 	elements tag ((element lexbuf) :: acc) lexbuf
    | [^'<'] ->
-	let cdatatxt = Ulexing.utf8_lexeme lexbuf in
-        let cdatatxt = cdatatxt ^ cdata lexbuf in
+	Ulexing.rollback lexbuf;
+        let cdatatxt = cdata lexbuf in
 	   elements tag ((Xmlcdata cdatatxt) :: acc) lexbuf
    | _ -> 
 	parse_error (Ulexing.utf8_lexeme lexbuf) "Invalid XML [elements]"
