@@ -30,50 +30,77 @@ type x_data_type = [
 | `TEXT_PRIVATE
 | `TEXT_SINGLE
 ]
-let make_x_data_field ?(label="") ?(var="")
-      ?(value="") ?(required=false) ?options (type_:x_data_type) =
+let make_x_data_field ?label ?var ?value ?required ?options ?type_ () =
+   let a1 = match type_ with
+      | None -> []
+      | Some t -> ["type", match t with
+		      | `BOOLEAN -> "boolean"
+		      | `FIXED -> "fixed"
+		      | `HIDDEN -> "hidden"
+		      | `JID_MULTI -> "jid-multi"
+		      | `JID_SINGLE -> "jid-single"
+		      | `LIST_MULTI -> "list-multi"
+		      | `LIST_SINGLE -> "list-single"
+		      | `TEXT_MULTI -> "text-multi"
+		      | `TEXT_PRIVATE -> "text-private"
+		      | `TEXT_SINGLE -> "text-single"] in
+   let a2 = match label with
+      | None -> a1
+      | Some l -> ("label", l) :: a1
+   in
+   let a3 = match var with
+      | None -> a2
+      | Some v -> ("var", v) :: a2
+   in
+   let s1 =  match required with
+      | Some true -> [make_simple_cdata "required" ""]
+      | Some false
+      | None -> [] in
+   let s2 = match value with
+      | None -> s1
+      | Some v -> make_simple_cdata "value" v :: s1 in
+   let s3 = match options with
+      | None -> s2
+      | Some opts -> 
+	   s2 @ List.map (function l, v ->
+			     Xmlelement ("option", [("label", l)],
+					 [make_simple_cdata "value" v])
+                         ) opts in
+      Xmlelement ("field", a3, s3)
 
-   let a1 = [("type", 
-	      match type_ with
-		 | `BOOLEAN -> "boolean"
-		 | `FIXED -> "fixed"
-		 | `HIDDEN -> "hidden"
-		 | `JID_MULTI -> "jid-multi"
-		 | `JID_SINGLE -> "jid-single"
-		 | `LIST_MULTI -> "list-multi"
-		 | `LIST_SINGLE -> "list-single"
-		 | `TEXT_MULTI -> "text-multi"
-		 | `TEXT_PRIVATE -> "text-private"
-		 | `TEXT_SINGLE -> "text-single"
-	     )] in
-   let a2 = if label <> "" then ("label", label) :: a1 else a1 in
-   let a3 = if var <> "" then ("var", var) :: a2 else a2 in
+type xdata_t = [
+| `Form
+| `Submit
+| `Cancel
+| `Result
+]
 
-   let s1 = [] in
-   let s2 = if required then make_simple_cdata "required" "" :: s1 else s1 in
-   let s3 = if value <> "" then make_simple_cdata "value" value :: s2 else s2 in
-   let s4 = match options with
-         | None -> s3
-         | Some opts ->
-              s3 @ List.map (function l, v ->
-                                Xmlelement ("option", [("label", l)],
-                                            [make_simple_cdata "value" v])
-                            ) opts in
-
-      Xmlelement ("field", a3, s4)
-
-let make_x_data type_ title instructions fieldlist =
+let make_x_data ?title ?instructions fieldlist (type_:xdata_t) =
    let s1 =
-      if instructions <> ""
-      then make_simple_cdata "instructions" instructions :: fieldlist
-      else fieldlist
+      match instructions with
+	 | None -> fieldlist
+	 | Some instr ->
+	      make_simple_cdata "instructions" instr:: fieldlist
    in
    let s2 =
-      if title <> ""
-      then make_simple_cdata "title" title :: s1
-      else s1
+      match title with
+	 | None -> s1
+	 | Some t -> make_simple_cdata "title" t :: s1
    in
-      Xmlelement ("x", [("xmlns", "jabber:x:data"); ("type", type_)], s2)
+      Xmlelement ("x", [("xmlns", "jabber:x:data"); ("type", match type_ with
+							| `Form -> "form"
+							| `Submit -> "submit"
+							| `Cancel -> "cancel"
+							| `Result -> "result")],
+		  s2)
+
+let get_x_data_type xdata =
+   match safe_get_attr_s xdata "type" with
+      | "result" -> `Result
+      | "cancel" -> `Cancel
+      | "form" -> `Form
+      | "submit" -> `Submit
+      | _ -> raise InvalidProtocol
 
 let get_x_data_fields xdata =
    match xdata with
@@ -121,3 +148,29 @@ let iq_vcard_query ?from ?lang ~id to_ =
       Xmlelement ("iq", a3, 
 		  [Xmlelement ("vCard", ["xmlns", "vcard-temp"], [])])
       
+let iq_last_reply start_time xml =
+   match xml with
+      | Xmlelement (_, attrs, _) ->
+	   let newattrs = make_attrs_reply ~type_:"result" attrs in
+	      Xmlelement ("iq", newattrs, 
+			  [Xmlelement ("query", ["xmlns", "jabber:iq:last";
+						 "seconds", 
+	string_of_int (int_of_float ((Unix.gettimeofday ()) -. start_time))],
+				       [])])
+      | _ -> raise NonXmlelement
+
+(* jep 90 *)
+(*
+let iq_time_reply xml =
+   let time = Unix.gettimeofday () in
+      iq_reply xml
+      ~subels:[make_simple_cdata "utc" "";
+	       make_simple_cdata "tz" "";
+	       make_simple_cdata "display" ""]
+
+*)
+(*
+     <utc>20020910T17:58:35</utc>                                               
+     <tz>MDT</tz>                                                               
+     <display>Tue Sep 10 12:58:35 2002</display>                                
+*)

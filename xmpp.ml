@@ -9,6 +9,7 @@ exception XMPPError of string
 exception XMPPStreamEnd
 exception XMPPStreamError of Xml.element list
 exception InvalidStanza
+exception InvalidProtocol
 
 let send_xml out (el:element) = out (Xml.element_to_string el)
 
@@ -96,7 +97,7 @@ let open_stream_service out next_xml server name password =
 	       match_tag "handshake" el;
 	       send_xml out, stream
 	       
-let connect ?logfile server port =
+let connect ?decode ?logfile server port =
    let inet_addr =
       try Unix.inet_addr_of_string server with Failure("inet_addr_of_string") ->
          (Unix.gethostbyname server).Unix.h_addr_list.(0) in
@@ -104,9 +105,6 @@ let connect ?logfile server port =
    let in_stream, out_stream = Unix.open_connection sock_addr in
       match logfile with
 	 | Some file ->
-              let f1, f2 = Unix.pipe () in
-              let out_pipe = Unix.out_channel_of_descr f2 in
-              let in_pipe = Unix.in_channel_of_descr f1 in
               let logfd = open_out_gen [Open_creat; Open_append] 0o666  file in
               let send_raw raw =
 		 Printf.fprintf logfd "OUT: %s\n" raw;
@@ -114,34 +112,43 @@ let connect ?logfile server port =
 		 output_string out_stream raw;
 		 flush out_stream
               in
-              let rec debug_proxy () =
+	      let ch_data = Queue.create () in
+	      let fill_data () =
 		 let str = String.create 8192 in
-		 let size = input in_stream str 0 8192 in
+		 let size = input in_stream str 0 8182 in
 		    if size = 0 then begin
 		       close_out logfd;
-		       close_out out_pipe;
-		       Thread.exit ()
-		    end;
-		    let data = (String.sub str 0 size) in
-		       Printf.fprintf logfd "IN: %s\n" data;
-		       flush logfd;
-		       output_string out_pipe data;
-		       flush out_pipe;
-		       debug_proxy ()
-              in
-              let t = Thread.create debug_proxy () in
-              let next_xml = Xmlstream.parse_stream in_pipe in
+		       close_in in_stream;
+		       Queue.clear ch_data;
+		       raise End_of_file
+		    end
+		    else
+		       let data = String.sub str 0 size in
+			  Printf.fprintf logfd "IN: %s\n" data;
+			  flush logfd;
+			  String.iter (fun s -> Queue.add s ch_data) data
+	      in
+	      let proxy_stream _ =
+		 try
+		    if Queue.is_empty ch_data then
+		       fill_data ();
+		    Some (Queue.pop ch_data)
+		 with End_of_file -> None
+	      in
+              let next_xml = Xmlstream.from_stream ?decode
+		 (Stream.from proxy_stream) in
 		 send_raw, next_xml
 	 | None ->
               let send_raw text =
 		 output_string out_stream text;
 		 flush out_stream
               in
-              let next_xml = Xmlstream.parse_stream in_stream in
+              let next_xml = Xmlstream.parse_stream ?decode in_stream in
 		 send_raw, next_xml
 
-let client ?logfile ~username ~password ~resource ?(port=5222) ~server () =
-   let raw_out, next_xml = connect ?logfile server port in
+let client ?logfile ~username ~password ~resource ?(port=5222) ~server 
+      ?decode () =
+   let raw_out, next_xml = connect ?decode ?logfile server port in
       open_stream_client raw_out next_xml server username password resource
 
 let service ?logfile server port username password =
@@ -221,10 +228,8 @@ let safe_jid_of_string str =
       }
 
 let string_of_jid (jid:jid) =
-   if jid.resource <> "" then
-      String.concat "" [jid.user; "@"; jid.server; "/"; jid.resource]
-   else
-      String.concat "" [jid.user; "@"; jid.server]
+   (if jid.user = "" then "" else jid.user ^ "@") ^ jid.server ^
+      (if jid.resource = "" then "" else "/" ^ jid.resource)
 
 let get_xmlns xml =
    let subel = List.find (function
@@ -285,7 +290,16 @@ let iq_info xml =
 let iq_reply ?type_ ?subels xml =
    match xml with
       | Xmlelement (_, attrs, subels1) ->
-           (let newattrs = make_attrs_reply attrs ?type_ in
+	   let newtype = match type_ with
+	      | None -> "result"
+	      | Some t ->
+		   match t with
+		      | `Result -> "result"
+		      | `Get -> "get"
+		      | `Set -> "set"
+		      | `Error -> "error"
+	   in
+              (let newattrs = make_attrs_reply attrs ~type_:newtype in
 	       match subels with
 		  | None -> Xmlelement ("iq", newattrs, subels1)
 		  | Some news ->
@@ -359,11 +373,11 @@ let presence_info xml =
       | _ ->
            let show = 
               match try get_cdata ~path:["show"] xml with Not_found -> "" with
-                 | "away" -> Some `Away
-                 | "xa" -> Some `XA
-                 | "dnd" -> Some `DND
-                 | "chat" -> Some `Chat
-                 | _ -> None
+                 | "away" -> `Away
+                 | "xa" -> `XA
+                 | "dnd" -> `DND
+                 | "chat" -> `Chat
+                 | _ -> `Online
            in
 	      `Available show
    in
@@ -418,7 +432,7 @@ type message_type = [
 | `Error
 ]
 
-let make_message ?from ?to_ ?type_ ?id ?subject ?body ?subels ~lang () =
+let make_message ?from ?to_ ?type_ ?id ?subject ?body ?subels ?lang () =
    let a1 = match from with
       | None -> []
       | Some f -> ["from", f] in

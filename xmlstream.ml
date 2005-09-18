@@ -30,15 +30,15 @@ type t =
    | StreamEnd
    | Element of element
 
-let rec stream = lexer
+let rec stream decode = lexer
    | eof -> 
 	StreamEnd
    | space+ ->
-	stream lexbuf
+	stream decode lexbuf
    | "<?xml" ->
 	Element (xmldecl [] lexbuf)
    | "<stream:stream" ->
-	let empty, attrs = attributes [] lexbuf in
+	let empty, attrs = attributes decode [] lexbuf in
 	   if empty || attrs = [] then
 	      parse_error  "No attrs or features" "Invalud XML"
 	   else
@@ -50,18 +50,18 @@ let rec stream = lexer
    | "<stream:features" space* '>' ->
 	Element 
 	   (Xmlelement ("stream:features", [], 
-			elements "stream:features" [] lexbuf))
+			elements decode "stream:features" [] lexbuf))
 
    | "<stream:error>" ->
-	StreamError (elements "stream:error" [] lexbuf)
+	StreamError (elements decode "stream:error" [] lexbuf)
    | "</stream:stream>" ->
 	StreamEnd
    | '<' ->
 	let tag = name lexbuf in
-	let empty, attrs = attributes [] lexbuf in
+	let empty, attrs = attributes decode [] lexbuf in
 	let subels = match empty with
 	   | true -> []
-	   | false -> elements tag [] lexbuf
+	   | false -> elements decode tag [] lexbuf
 	in
 	let el = Xmlelement (tag, attrs, subels) in
 	   Element el
@@ -75,18 +75,18 @@ and stream_features = lexer
 	parse_error (Ulexing.utf8_lexeme lexbuf) 
 	    "Invalid XMPP [stream_features]"
 *)
-and element = lexer
+and element decode = lexer
    | name ->
 	let tag = Ulexing.utf8_lexeme lexbuf in
-	let empty, attrs = attributes [] lexbuf in
+	let empty, attrs = attributes decode [] lexbuf in
 	   if empty then
 	      Xmlelement (tag, attrs, [])
 	   else
-	      Xmlelement (tag, attrs, (elements tag [] lexbuf))
+	      Xmlelement (tag, attrs, (elements decode tag [] lexbuf))
    | _ -> 
 	parse_error (Ulexing.utf8_lexeme lexbuf) "Invalid XML [ekenebt]"
 
-and elements tag acc = lexer
+and elements decode tag acc = lexer
    | "</" ->
 	let endtag = name lexbuf in
 	   if endtag = tag then 
@@ -97,24 +97,29 @@ and elements tag acc = lexer
 	   else
 	      parse_error (Ulexing.utf8_lexeme lexbuf) "Invalid XML [elements]"
    | '<' ->
-	elements tag ((element lexbuf) :: acc) lexbuf
+	elements decode tag ((element decode lexbuf) :: acc) lexbuf
    | [^'<'] ->
 	Ulexing.rollback lexbuf;
-        let cdatatxt = cdata lexbuf in
-	   elements tag ((Xmlcdata cdatatxt) :: acc) lexbuf
+	let cdatatxt =
+	   if decode then
+	      cdata_with_decode "" lexbuf
+	   else
+              cdata lexbuf 
+	in
+	   elements decode tag ((Xmlcdata cdatatxt) :: acc) lexbuf
    | _ -> 
 	parse_error (Ulexing.utf8_lexeme lexbuf) "Invalid XML [elements]"
 
 and xmldecl attrs = lexer
    | space+ ->
-	let attr = attribute lexbuf in
+	let attr = attribute false lexbuf in
 	   xmldecl (attr :: attrs) lexbuf
    | space* "?>" space* "<stream:stream" ->
 	if (try List.assoc "version" attrs = "1.0" with _ -> false)
 	then
 	   if (try List.assoc "encoding" attrs == "UTF-8" with _ -> true)
 	   then 
-	      let empty, attrs = attributes [] lexbuf in
+	      let empty, attrs = attributes false [] lexbuf in
 		 if empty || attrs == [] then
 		    parse_error (Ulexing.utf8_lexeme lexbuf) "Invalud XML"
 		 else
@@ -137,44 +142,68 @@ and name = lexer
    | _ -> 
 	parse_error (Ulexing.utf8_lexeme lexbuf) "Invalid char in tag"
 
-and attributes attrs = lexer
+and attributes decode attrs = lexer
    | space? "/>" -> 
 	true, attrs
    | space? '>' -> 
 	false, attrs
    | space+ ->
-	let attr = attribute lexbuf in
-           attributes (attr :: attrs) lexbuf
+	let attr = attribute decode lexbuf in
+           attributes decode (attr :: attrs) lexbuf
    | _ ->
 	parse_error (Ulexing.utf8_lexeme lexbuf) "No space here"
 
-and attribute = lexer
+and attribute decode = lexer
    | name '=' ->
 	let attrname = enclosed lexbuf 0 1 in
-           attrname, attvalue lexbuf
+           attrname, attvalue decode lexbuf
    | _ -> 
 	parse_error (Ulexing.utf8_lexeme lexbuf) "Invalid attribute name"
 
-and attvalue = lexer
+and attvalue decode = lexer
    | "\"" -> 
-	attvalue_quot "" lexbuf
+	attvalue_quot decode "" lexbuf
    | "'" -> 
-	attvalue_apos "" lexbuf
+	attvalue_apos decode "" lexbuf
    | _ -> 
 	parse_error (Ulexing.utf8_lexeme lexbuf) "No quotes"
 
-and attvalue_quot value = lexer
-   | ([^ "<&\""] | ent)* ->
-	attvalue_quot (value ^ (Ulexing.utf8_lexeme lexbuf)) lexbuf
+and attvalue_quot decode value = lexer
+   | [^ "<&\""]* ->
+	attvalue_quot decode (value ^ (Ulexing.utf8_lexeme lexbuf)) lexbuf
+   | ent ->
+	if decode then
+	   let s = match Ulexing.utf8_lexeme lexbuf with
+	      | "&lt;" -> "<"
+	      | "&gt;" -> ">"
+	      | "&amp;" -> "&"
+	      | "&apos;" -> "'"
+	      | "&quot;" -> "\""
+	      | other -> other
+	   in attvalue_quot decode (value ^ s) lexbuf
+	else
+	   attvalue_quot decode (value ^ Ulexing.utf8_lexeme lexbuf) lexbuf
    | "\"" -> 
 	value
    | _ -> 
 	parse_error (Ulexing.utf8_lexeme lexbuf) 
 	   "Not expected in attribute value"
 
-and attvalue_apos value = lexer
-   | ([^"<&\'"] | ent)* ->
-	attvalue_apos (value ^ (Ulexing.utf8_lexeme lexbuf)) lexbuf
+and attvalue_apos decode value = lexer
+   | [^"<&\'"]+ ->
+	attvalue_apos decode (value ^ (Ulexing.utf8_lexeme lexbuf)) lexbuf
+   | ent ->
+	if decode then
+	   let s = match Ulexing.utf8_lexeme lexbuf with
+	      | "&lt;" -> "<"
+	      | "&gt;" -> ">"
+	      | "&amp;" -> "&"
+	      | "&apos;" -> "'"
+	      | "&quot;" -> "\""
+	      | other -> other
+	   in attvalue_quot decode (value ^ s) lexbuf
+	else
+	   attvalue_quot decode (value ^ Ulexing.utf8_lexeme lexbuf) lexbuf
    | "'" -> 
 	value
    | _ -> 
@@ -187,15 +216,38 @@ and cdata = lexer
    | any ->
 	parse_error (Ulexing.utf8_lexeme lexbuf) "Invalid XML [cdata]"
 
+and cdata_with_decode acc = lexer
+   | [^"<&"]+ ->
+	cdata_with_decode (acc ^ Ulexing.utf8_lexeme lexbuf) lexbuf
+   | ent ->
+	let s = match Ulexing.utf8_lexeme lexbuf with
+	   | "&lt;" -> "<"
+	   | "&gt;" -> ">"
+	   | "&amp;" -> "&"
+	   | "&apos;" -> "'"
+	   | "&quot;" -> "\""
+	   | other -> other
+	in cdata_with_decode (acc ^ s) lexbuf
+   | "<" ->
+	Ulexing.rollback lexbuf;
+	acc
+   | any ->
+	parse_error (Ulexing.utf8_lexeme lexbuf) "Invalid XML [cdata]"
+
 and eat_end = lexer
    | space* '>' ->
 	()
    | any ->
 	parse_error (Ulexing.utf8_lexeme lexbuf) "Invalid XML [eat_end]"
 
+let from_stream ?(decode=false) s =
+   let lexbuf = Ulexing.from_utf8_stream s in
+   let z () =
+      stream decode lexbuf
+   in z
 
-let parse_stream channel =
+let parse_stream ?(decode=false) channel =
    let lexbuf = Ulexing.from_utf8_channel channel in
    let z () =
-      stream lexbuf
+      stream decode lexbuf
    in z

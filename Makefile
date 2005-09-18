@@ -3,7 +3,7 @@ OCAMLMAKEFILE = ../OCamlMakefile
 SOURCES       = uni_data.ml uni_norm.ml stringprep.ml \
 		auth.ml xmpp.ml error.ml jeps.ml
 PRE_TARGETS   = xmlstream.cmx
-THREADS       = yes
+#THREADS       = yes
 #USE_CAMLP4    = yes
 PACKS         = ulex
 INCDIRS       = ../libs/xml

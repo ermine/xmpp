@@ -171,12 +171,12 @@ let parse_error stanza =
       !cond, type_, !text
 
 
-let make_error_reply (xml:Xml.element) ?(descr:string option) (error:error) =
+let make_error_reply (xml:Xml.element) ?(text:string option) (error:error) =
    let code, err_type, cond = error_to_tuple error in
    let el1 =
       Xmlelement (cond, ["value", "urn:ietf:params:xml:ns:xmpp-stanzas"], []) in
    let el2 =
-      match descr with
+      match text with
 	 | Some text ->
 	      [el1;
 	       Xmlelement ("text", 
