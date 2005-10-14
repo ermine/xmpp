@@ -186,11 +186,13 @@ and attvalue_quot decode value = lexer
    | "\"" -> 
 	value
    | _ -> 
+print_endline "not expected here";
+print_endline value;
 	parse_error (Ulexing.utf8_lexeme lexbuf) 
 	   "Not expected in attribute value"
 
 and attvalue_apos decode value = lexer
-   | [^"<&\'"]+ ->
+   | [^"<&'"]+ ->
 	attvalue_apos decode (value ^ (Ulexing.utf8_lexeme lexbuf)) lexbuf
    | ent ->
 	if decode then
@@ -201,9 +203,9 @@ and attvalue_apos decode value = lexer
 	      | "&apos;" -> "'"
 	      | "&quot;" -> "\""
 	      | other -> other
-	   in attvalue_quot decode (value ^ s) lexbuf
+	   in attvalue_apos decode (value ^ s) lexbuf
 	else
-	   attvalue_quot decode (value ^ Ulexing.utf8_lexeme lexbuf) lexbuf
+	   attvalue_apos decode (value ^ Ulexing.utf8_lexeme lexbuf) lexbuf
    | "'" -> 
 	value
    | _ -> 

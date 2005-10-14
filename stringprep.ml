@@ -332,28 +332,68 @@ let stringprep ?(mode=Nameprep) str =
 *)
       Buffer.contents buffer
 
+let lowercase str =
+   let len = String.length str in
+   let rec aux i =
+      if i < len then
+	 let uc, j = next str i in
+	 let info = getUniCharInfo(uc) in
+	    if info land b1Mask = 0 then
+	       let  ruc =
+		  if info land mCMask = 0 then
+		     get_decomp (uc + getDelta info)
+		  else
+		     let mc = getMC info in
+			List.flatten (List.map (fun m ->
+						   get_decomp m) mc)
+	       in
+		  ruc @ (aux (i+j))
+	    else
+	       aux (i+j)
+      else
+	 []
+   in
+   let decomposed = aux 0 in
+      if decomposed  = [] then
+	 ""
+      else
+	 let composed = composite (canonical_ordering 
+				      (Array.of_list decomposed)) in
+
+   let first_ral = getUniCharInfo composed.(0) land d1Mask in
+   let have_ral = ref false in
+   let have_l = ref 0 in
+   let last_ral = ref 0 in
+   let buffer = Buffer.create (Array.length composed * 2) in
+
+      Array.iter (fun ruc ->
+		     let info = getUniCharInfo ruc in
+			last_ral := info land d1Mask;
+			have_ral := !have_ral || !last_ral > 0;
+			have_l := info land d2Mask;
+			store buffer ruc
+		 ) composed;
+(*
+      if !have_ral && (first_ral > 0 || !last_ral > 0 || !have_l > 0) then
+	 raise (StringprepError "invalid bidi");
+*)
+      Buffer.contents buffer
+(***)  
+
 let nameprep str = 
    if str <> "" then 
-      try stringprep ~mode:Nameprep str 
-      with exn ->
-	 Printf.eprintf "exception in nameprep: %s\n" str;
-	 raise exn
-   else ""
+      stringprep ~mode:Nameprep str 
+   else 
+      ""
 
 let nodeprep str = 
    if str <> "" then 
-      try
-	 stringprep ~mode:Nodeprep str 
-      with exn ->
-	 Printf.eprintf "exception in nodeprep: %s\n" str;
-	 raise exn
-   else ""
+      stringprep ~mode:Nodeprep str 
+   else 
+      ""
 
 let resourceprep str = 
    if str <> "" then 
-      try
-	 stringprep ~mode:Resourceprep str
-      with exn ->
-	 Printf.eprintf "exception in resourceprep:%s\n" str;
-	 raise exn
-   else ""
+      stringprep ~mode:Resourceprep str
+   else 
+      ""

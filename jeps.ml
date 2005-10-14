@@ -165,7 +165,7 @@ let iq_time_reply xml =
    let time = Unix.gettimeofday () in
       iq_reply xml
       ~subels:[make_simple_cdata "utc" "";
-	       make_simple_cdata "tz" "";
+	       (* make_simple_cdata "tz" ""; *)
 	       make_simple_cdata "display" ""]
 
 *)

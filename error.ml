@@ -134,7 +134,8 @@ let cond_to_error cond =
       | _ -> raise UnknownError
 
 let parse_error stanza =
-   let err = Xml.get_tag stanza ["error"] in
+   let err = Xml.get_by_xmlns stanza ~tag:"error" 
+      "xurn:ietf:params:xml:ns:xmpp-stanzas" in
    let type_ =
       match try Xml.get_attr_s err "type" with _ -> "" with
 	 | "cancel" -> `Cancel
@@ -171,10 +172,11 @@ let parse_error stanza =
       !cond, type_, !text
 
 
-let make_error_reply (xml:Xml.element) ?(text:string option) (error:error) =
+let make_error_reply (xml:Xml.element) ?(text:string option) 
+      ?specific_cond (error:error) =
    let code, err_type, cond = error_to_tuple error in
    let el1 =
-      Xmlelement (cond, ["value", "urn:ietf:params:xml:ns:xmpp-stanzas"], []) in
+      Xmlelement (cond, ["xmlns", "urn:ietf:params:xml:ns:xmpp-stanzas"], []) in
    let el2 =
       match text with
 	 | Some text ->
@@ -183,14 +185,19 @@ let make_error_reply (xml:Xml.element) ?(text:string option) (error:error) =
 			   ["xmlns", "urn:ietf:params:xml:ns:xmpp-stanzas";
 			    "xml:lang", "en"],
 			   [Xmlcdata text])]
-	 | None -> [el1]
-   in
+	 | None -> [el1] in
+   let el3 =
+      match specific_cond with
+	 | None -> el2
+	 | Some el ->
+	      el :: el2 in
+
       match xml with
 	 | Xmlelement (name, attrs, subtags) ->
 	      let a = make_attrs_reply attrs ~type_:"error" in
 		 Xmlelement (name, a,
                              subtags @ 
 				[Xmlelement
-                                    ("error",
-                                     [("code", code)], el2)])
+                                    ("error",["code", code;
+					      "type", err_type], el3)])
 	 | _ -> raise NonXmlelement
