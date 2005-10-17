@@ -238,7 +238,7 @@ let get_xmlns xml =
                          ) (Xml.get_subels xml) in
       Xml.get_attr_s subel "xmlns"
 
-let make_attrs_reply ?type_ attrs =
+let make_attrs_reply ?lang ?type_ attrs =
    let to_ = try List.assoc "to" attrs with Not_found -> ""
    and from = try List.assoc "from" attrs with Not_found -> "" in
 
@@ -246,12 +246,16 @@ let make_attrs_reply ?type_ attrs =
    let a2 = List.remove_assoc "from" a1 in
 
    let a3 = Xml.filter_attrs (("from", to_) :: ("to", from) :: a2) in
+   let a4 = match lang with
+      | None -> a3
+      | Some l ->
+	   ("xml:lang", l) :: List.remove_assoc "xml:lang" a3 in
       match type_ with
-         | None -> a3
+         | None -> a4
          | Some d ->
-              let a4 = List.remove_assoc "type" a3 in
-              let a5 = if d <> "" then ("type", d) :: a4 else a4 in
-                 a5
+              let a5 = List.remove_assoc "type" a4 in
+              let a6 = if d <> "" then ("type", d) :: a5 else a5 in
+                 a6
 
 type iq_type = [`Get | `Set | `Result | `Error]
 
@@ -287,7 +291,7 @@ let iq_info xml =
    in
       id, type_, xmlns
 		  
-let iq_reply ?type_ ?subels xml =
+let iq_reply ?type_ ?lang ?subels xml =
    match xml with
       | Xmlelement (_, attrs, subels1) ->
 	   let newtype = match type_ with
@@ -299,7 +303,7 @@ let iq_reply ?type_ ?subels xml =
 		      | `Set -> "set"
 		      | `Error -> "error"
 	   in
-              (let newattrs = make_attrs_reply attrs ~type_:newtype in
+              (let newattrs = make_attrs_reply attrs ?lang ~type_:newtype in
 	       match subels with
 		  | None -> Xmlelement ("iq", newattrs, subels1)
 		  | Some news ->
@@ -465,16 +469,3 @@ let make_message ?from ?to_ ?type_ ?id ?subject ?body ?subels ?lang () =
       | Some s -> s2 @ s in
       Xmlelement ("message", a5, s3)
 
-let make_attrs_reply ?type_ attrs =
-   let to_ = try List.assoc "to" attrs with Not_found -> ""
-   and from = try List.assoc "from" attrs with Not_found -> "" in
-
-   let a1 = List.remove_assoc "to" attrs in
-   let a2 = List.remove_assoc "from" a1 in
-
-   let a3 = Xml.filter_attrs (("from", to_) :: ("to", from) :: a2) in
-      match type_ with 
-         | None -> a3
-         | Some d ->
-              let a4 = List.remove_assoc "type" a3 in
-		 if d <> "" then ("type", d) :: a4 else a4

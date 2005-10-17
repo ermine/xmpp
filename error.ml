@@ -172,8 +172,8 @@ let parse_error stanza =
       !cond, type_, !text
 
 
-let make_error_reply (xml:Xml.element) ?(text:string option) 
-      ?specific_cond (error:error) =
+let make_error_reply (xml:Xml.element) ?(text:string option)
+      ?(text_lang:string option) ?specific_cond (error:error) =
    let code, err_type, cond = error_to_tuple error in
    let el1 =
       Xmlelement (cond, ["xmlns", "urn:ietf:params:xml:ns:xmpp-stanzas"], []) in
@@ -183,7 +183,9 @@ let make_error_reply (xml:Xml.element) ?(text:string option)
 	      [el1;
 	       Xmlelement ("text", 
 			   ["xmlns", "urn:ietf:params:xml:ns:xmpp-stanzas";
-			    "xml:lang", "en"],
+			    "xml:lang", (match text_lang with
+					    | None -> "en"
+					    | Some lang -> lang)],
 			   [Xmlcdata text])]
 	 | None -> [el1] in
    let el3 =
