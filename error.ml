@@ -42,7 +42,7 @@ type error_type = [
 let error_to_tuple (err:error) =
    match err with
       | `ERR_BAD_REQUEST -> 
-	   "400", "modufy", "bad-request"
+	   "400", "modify", "bad-request"
       | `ERR_CONFLICT -> 
 	   "409", "cancel", "conflict"
       | `ERR_FEATURE_NOT_IMPLEMENTED -> 

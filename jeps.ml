@@ -53,7 +53,7 @@ let make_x_data_field ?label ?var ?value ?required ?options ?type_ () =
       | Some v -> ("var", v) :: a2
    in
    let s1 =  match required with
-      | Some true -> [make_simple_cdata "required" ""]
+      | Some true -> [Xmlelement ("required", [], [])]
       | Some false
       | None -> [] in
    let s2 = match value with
