@@ -361,7 +361,7 @@ type presence_t = [
 | `Unsubscribe
 | `Unsubscribed
 | `Unavailable
-| `Available of (presence_show_t option)
+| `Available of presence_show_t
 | `Error
 ]
 
