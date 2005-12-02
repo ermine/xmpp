@@ -143,9 +143,9 @@ and name = lexer
 	parse_error (Ulexing.utf8_lexeme lexbuf) "Invalid char in tag"
 
 and attributes decode attrs = lexer
-   | space? "/>" -> 
+   | space* "/>" -> 
 	true, attrs
-   | space? '>' -> 
+   | space* '>' -> 
 	false, attrs
    | space+ ->
 	let attr = attribute decode lexbuf in
