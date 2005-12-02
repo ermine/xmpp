@@ -134,8 +134,11 @@ let cond_to_error cond =
       | _ -> raise UnknownError
 
 let parse_error stanza =
-   let err = Xml.get_by_xmlns stanza ~tag:"error" 
-      "xurn:ietf:params:xml:ns:xmpp-stanzas" in
+   let err =
+      try Xml.get_by_xmlns stanza ~tag:"error" 
+	 "xurn:ietf:params:xml:ns:xmpp-stanzas" with Not_found ->
+	    get_tag stanza ["error"]
+   in
    let type_ =
       match try Xml.get_attr_s err "type" with _ -> "" with
 	 | "cancel" -> `Cancel
