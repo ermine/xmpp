@@ -46,7 +46,7 @@ let open_stream_client out next_xml server username password resource =
             out (start_stream server);
 	    let el = stream () in match_tag "stream:stream" el;
 	       let el = stream () in match_tag "stream:features" el;
-		  let bind = Xml.get_tag el ["bind"] in
+		  let _bind = Xml.get_tag el ["bind"] in
 		     send_xml out 
 			(Xmlelement ("iq", ["type", "set";
 					    "to", server; "id", "bind1"],
@@ -169,6 +169,7 @@ let get_resource jid =
    with Not_found -> ""
 
 type jid = {
+   string: string;
    user: string;
    luser: string;
    server: string;
@@ -194,6 +195,7 @@ let jid_of_string str =
 	 "", bare_jid
    in
       {
+	 string = str;
 	 user = user;
 	 server = host;
 	 resource = resource;
@@ -219,6 +221,7 @@ let safe_jid_of_string str =
 	 "", bare_jid
    in
       {
+	 string = str;
 	 user = user;
 	 server = host;
 	 resource = resource;
