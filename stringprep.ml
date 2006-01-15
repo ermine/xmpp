@@ -57,6 +57,7 @@ let tCount = 28
 let nCount = (vCount * tCount)
 let sCount = (lCount * nCount)
 
+(*
 let decompose_hangul uchar =
    let sIndex = uchar - sBase in
       (* not a hangul syllable *)
@@ -67,6 +68,7 @@ let decompose_hangul uchar =
 	 let v = vBase + (sIndex mod nCount) / tCount in
 	 let t = tBase + sIndex mod tCount in
 	    [l; v]
+*)
 
 let utf8_width u =
    if u <= 0x7f then 1
@@ -306,7 +308,9 @@ let stringprep ?(mode=Nameprep) str =
 	      aCMask lor c21Mask
    in
 
+(*
    let first_ral = getUniCharInfo composed.(0) land d1Mask in
+*)
    let have_ral = ref false in
    let have_l = ref 0 in
    let last_ral = ref 0 in
@@ -360,7 +364,9 @@ let lowercase str =
 	 let composed = composite (canonical_ordering 
 				      (Array.of_list decomposed)) in
 
+(*
    let first_ral = getUniCharInfo composed.(0) land d1Mask in
+*)
    let have_ral = ref false in
    let have_l = ref 0 in
    let last_ral = ref 0 in

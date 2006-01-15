@@ -75,7 +75,7 @@ let sasl_digest_response chl username server password =
 let sasl_digest_rspauth chl =
    let pairs = get_pairs (Cryptokit.transform_string
                              (Cryptokit.Base64.decode ()) chl) in
-   let rspauth = List.assoc "rspauth" pairs in
+   let _rspauth = List.assoc "rspauth" pairs in
       ()
 
 let sasl_digest out server username password next_xml =
@@ -101,6 +101,8 @@ let sasl_digest out server username password next_xml =
 				[]));
 		       let succ = next_xml () in
 			  match_tag "success" succ
+	       | _ ->
+		    raise AuthError
 					  
 let sasl_auth mechanisms out server username password next_xml =
    if List.mem "DIGEST-MD5" mechanisms then
