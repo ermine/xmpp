@@ -9,6 +9,7 @@ OCAMLNLDFLAGS   = xmlstream.cmx
 OCAMLBLDFLAGS   = xmlstream.cmo
 
 RESULT         = xmpp
+TRASH		= xmlstream.cm* xmlstream.o
 
 all: ncl bcl
 

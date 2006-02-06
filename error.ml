@@ -133,6 +133,30 @@ let cond_to_error cond =
       | "unexpected-request" -> `ERR_UNEXPECTED_REQUEST
       | _ -> raise UnknownError
 
+let parse_stream_error els =
+   let cond = ref `ERR_UNDEFINED_CONDITION in
+   let text = ref "" in
+   let rec aux_iter tail acc =
+      match tail with
+	 | [] -> List.rev acc
+	 | x :: xs ->
+	      (match x with
+		  | Xmlelement (name, attrs, els) ->
+		       if List.assoc "xmlns" attrs = 
+			  "urn:ietf:params:xml:ns:xmpp-streams" then begin
+			     try 
+				cond := cond_to_error name 
+			     with UnknownError ->
+				match name with
+				   | "text" -> text := get_cdata x
+				   | _ -> ()
+			  end
+		  | _ -> ());
+	      aux_iter xs acc
+   in
+   let rest = aux_iter els [] in
+      !cond, !text, rest
+
 let parse_error stanza =
    let err =
       try Xml.get_by_xmlns stanza ~tag:"error" 
@@ -150,21 +174,25 @@ let parse_error stanza =
    in
    let cond = ref `ERR_UNDEFINED_CONDITION in
    let text = ref "" in
-      List.iter (function x ->
-		    match x with
-		       | Xmlelement (name, attrs, els) ->
-			    begin
-			       if List.assoc "xmlns" attrs = 
-				  "urn:ietf:params:xml:ns:xmpp-stanzas" then
-				     try 
-					cond := cond_to_error name 
-				     with UnknownError ->
-					match name with
-					   | "text" -> text := get_cdata x
-					   | _ -> ()
-			    end
-		       | _ -> ()
-		) (get_subels err);
+   let rec aux_iter tail acc =
+      match tail with
+	 | [] -> List.rev acc
+	 | x :: xs ->
+	      (match x with
+		  | Xmlelement (name, attrs, els) ->
+		       if List.assoc "xmlns" attrs = 
+			  "urn:ietf:params:xml:ns:xmpp-stanzas" then begin
+			     try 
+				cond := cond_to_error name 
+			     with UnknownError ->
+				match name with
+				   | "text" -> text := get_cdata x
+				   | _ -> ()
+			  end
+		  | _ -> ());
+	      aux_iter xs acc
+   in
+   let rest = aux_iter (get_subels err) [] in
       begin
 	 try
 	    if !cond = `ERR_UNDEFINED_ERROR then
@@ -172,8 +200,7 @@ let parse_error stanza =
 		  cond := code_to_error code
 	 with _ -> ()
       end;
-      !cond, type_, !text
-
+      !cond, type_, !text, rest
 
 let make_error_reply (xml:Xml.element) ?(text:string option)
       ?(text_lang:string option) ?specific_cond (error:error) =
