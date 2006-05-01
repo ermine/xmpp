@@ -1,0 +1,6 @@
+description = "XMPP library"
+requires = "ulex cryptokit xml"
+version = "1"
+archive(byte) = "xmpp.cma"
+archive(native) = "xmpp.cmxa"
+

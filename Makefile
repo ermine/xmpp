@@ -1,22 +1,26 @@
 OCAMLMAKEFILE = OCamlMakefile
 
-SOURCES       = uni_data.ml uni_norm.ml stringprep.ml \
-		auth.ml xmpp.ml error.ml jeps.ml
-PRE_TARGETS   = xmlstream.cmx xmlstream.cmo
-INCDIRS       = ../libs/xml
+SOURCES		= uni_data.ml uni_norm.ml stringprep.ml \
+		  auth.ml xmpp.ml error.ml \
+		  jeps.ml xdata.ml disco.ml xcommands.ml
+PACKS		= cryptokit xml
+PRE_TARGETS	= xmlstream.cmx xmlstream.cmo
+OCAMLNLDFLAGS	= xmlstream.cmx
+OCAMLBLDFLAGS	= xmlstream.cmo
 
-OCAMLNLDFLAGS   = xmlstream.cmx
-OCAMLBLDFLAGS   = xmlstream.cmo
-
-RESULT         = xmpp
+RESULT		= xmpp
 TRASH		= xmlstream.cm* xmlstream.o
+
+include ../../Makefile.global
+include ../Makefile.inc
+LIBINSTALL_FILES += error.cmi jeps.cmi xcommands.cmi auth.cmi stringprep.cmi xdata.cmi disco.cmi
 
 all: ncl bcl
 
 xmlstream.cmo: xmlstream.ml
-	ocamlfind ocamlc  -syntax camlp4o -I ../libs/xml -package ulex -linkpkg -c xmlstream.ml
+	ocamlfind ocamlc  -syntax camlp4o -package ulex,xml -c xmlstream.ml
 xmlstream.cmx: xmlstream.ml
-	ocamlfind ocamlopt -syntax camlp4o -I ../libs/xml -package ulex -linkpkg -c xmlstream.ml
+	ocamlfind ocamlopt -syntax camlp4o -package ulex,xml -c xmlstream.ml
 
 include $(OCAMLMAKEFILE)
 

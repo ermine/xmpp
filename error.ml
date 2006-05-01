@@ -93,7 +93,7 @@ let code_to_error code =
       | "401" -> `ERR_NOT_AUTHORIZED
       | "402" -> `ERR_PAYMENT_REQUIRED
       | "403" -> `ERR_FORBIDDEN
-      | "404" -> `ERR_NOT_FOUND
+      | "404" -> `ERR_ITEM_NOT_FOUND
       | "405" -> `ERR_NOT_ALLOWED
       | "406" -> `ERR_NOT_ACCEPTABLE
       | "407" -> `ERR_REGISTRATION_REQUIRED
@@ -195,7 +195,7 @@ let parse_error stanza =
    let rest = aux_iter (get_subels err) [] in
       begin
 	 try
-	    if !cond = `ERR_UNDEFINED_ERROR then
+	    if !cond = `ERR_UNDEFINED_CONDITION then
 	       let code = get_attr_s err "code" in
 		  cond := code_to_error code
 	 with _ -> ()

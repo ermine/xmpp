@@ -97,13 +97,13 @@ let open_stream_service out next_xml server name password =
 	       match_tag "handshake" el;
 	       send_xml out, stream
 	       
-let connect ?decode ?logfile server port =
+let connect ?decode ?rawxml_log server port =
    let inet_addr =
       try Unix.inet_addr_of_string server with Failure("inet_addr_of_string") ->
          (Unix.gethostbyname server).Unix.h_addr_list.(0) in
    let sock_addr = Unix.ADDR_INET (inet_addr, port) in
    let in_stream, out_stream = Unix.open_connection sock_addr in
-      match logfile with
+      match rawxml_log with
 	 | Some file ->
               let logfd = open_out_gen [Open_creat; Open_append] 0o666  file in
               let send_raw raw =
@@ -146,13 +146,13 @@ let connect ?decode ?logfile server port =
               let next_xml = Xmlstream.parse_stream ?decode in_stream in
 		 send_raw, next_xml
 
-let client ?logfile ~username ~password ~resource ?(port=5222) ~server 
+let client ?rawxml_log ~username ~password ~resource ?(port=5222) ~server 
       ?decode () =
-   let raw_out, next_xml = connect ?decode ?logfile server port in
+   let raw_out, next_xml = connect ?decode ?rawxml_log server port in
       open_stream_client raw_out next_xml server username password resource
 
-let service ?logfile server port username password =
-   let raw_out, next_xml = connect ?logfile server port in
+let service ?rawxml_log server port username password =
+   let raw_out, next_xml = connect ?rawxml_log server port in
       open_stream_service raw_out next_xml server username password
 
 (*********)
@@ -321,7 +321,8 @@ let iq_reply ?type_ ?lang ?subels xml =
            )
       | _ -> raise NonXmlelement
 
-let iq_query ?to_ ?from ?xmlns ?exattrs ?subels ?lang ~id ~type_ () =
+let iq_query ?to_ ?from ?(query_tag="query") ?xmlns ?exattrs ?subels ?lang ~id 
+      ~type_ () =
    let a1 = [("id", id); ("type", match type_ with
 			     | `Get -> "get"
 			     | `Set -> "set"
@@ -339,7 +340,7 @@ let iq_query ?to_ ?from ?xmlns ?exattrs ?subels ?lang ~id ~type_ () =
 
    let s1 = match xmlns with
       | None -> []
-      | Some x -> [Xmlelement ("query", ("xmlns", x) :: 
+      | Some x -> [Xmlelement (query_tag, ("xmlns", x) :: 
 				  (match exattrs with
 				      | None -> []
 				      | Some ex -> ex),
