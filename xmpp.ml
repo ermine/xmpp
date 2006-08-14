@@ -1,6 +1,6 @@
-(*                                                                          *)
-(* (c) 2004, 2005 Anastasia Gornostaeva. <ermine@ermine.pp.ru>              *)
-(*                                                                          *)
+(*
+ * (c) 2004, 2005, 2006 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
+ *)
 
 open Xmlstream
 open Xml
@@ -42,7 +42,7 @@ let open_stream_client out next_xml server username password resource =
 	 let mechanisms = Xml.get_tag el ["mechanisms"] in
 	 let mels = Xml.get_subels ~tag:"mechanism" mechanisms in
 	 let m = List.map (function x -> Xml.get_cdata x) mels in
-            Auth.sasl_auth m (send_xml out) server username password stream;
+            Auth.auth stream (send_xml out) m server username password;
             out (start_stream server);
 	    let el = stream () in match_tag "stream:stream" el;
 	       let el = stream () in match_tag "stream:features" el;
@@ -321,7 +321,7 @@ let iq_reply ?type_ ?lang ?subels xml =
            )
       | _ -> raise NonXmlelement
 
-let iq_query ?to_ ?from ?(query_tag="query") ?xmlns ?exattrs ?subels ?lang ~id 
+let make_iq ?to_ ?from ?(query_tag="query") ?xmlns ?exattrs ?subels ?lang ~id 
       ~type_ () =
    let a1 = [("id", id); ("type", match type_ with
 			     | `Get -> "get"

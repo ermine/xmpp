@@ -117,10 +117,10 @@ and xmldecl attrs = lexer
    | space* "?>" space* "<stream:stream" ->
 	if (try List.assoc "version" attrs = "1.0" with _ -> false)
 	then
-	   if (try List.assoc "encoding" attrs == "UTF-8" with _ -> true)
+	   if (try List.assoc "encoding" attrs = "UTF-8" with _ -> true)
 	   then 
 	      let empty, attrs = attributes false [] lexbuf in
-		 if empty || attrs == [] then
+		 if empty || attrs = [] then
 		    parse_error (Ulexing.utf8_lexeme lexbuf) "Invalud XML"
 		 else
 		    Xmlelement ("stream:stream", attrs, [])

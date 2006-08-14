@@ -1,6 +1,6 @@
-(*                                                                          *)
-(* (c) 2004, 2005 Anastasia Gornostaeva. <ermine@ermine.pp.ru>              *)
-(*                                                                          *)
+(*
+ * (c) 2004, 2005, 2006 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
+ *)
 
 open Unix
 open Xmpp
@@ -21,7 +21,7 @@ let iq_version_reply name version xml =
 (* JEP 54 vCard-temp *)
 
 let iq_vcard_query ?from ?lang ~id to_ =
-   iq_query ~id ?from ~to_ ~type_:`Get ?lang 
+   make_iq ~id ?from ~to_ ~type_:`Get ?lang 
       ~xmlns:"vcard-temp" ~query_tag:"vCard" ()
       
 let iq_last_reply start_time xml =
