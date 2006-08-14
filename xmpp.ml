@@ -42,7 +42,7 @@ let open_stream_client out next_xml server username password resource =
 	 let mechanisms = Xml.get_tag el ["mechanisms"] in
 	 let mels = Xml.get_subels ~tag:"mechanism" mechanisms in
 	 let m = List.map (function x -> Xml.get_cdata x) mels in
-            Auth.auth stream (send_xml out) m server username password;
+            Sasl.auth stream (send_xml out) m server username password;
             out (start_stream server);
 	    let el = stream () in match_tag "stream:stream" el;
 	       let el = stream () in match_tag "stream:features" el;
