@@ -11,7 +11,7 @@ let regexp any = xml_letter | xml_digit | xml_extender | xml_base_char
 
 let regexp name_char = xml_letter | xml_digit | '.' | '-' | '_' | ':'
                      | xml_combining_char | xml_extender
-let regexp name = (xml_letter | '_' | ':') (name_char*)
+let regexp name = (xml_letter | '_' | ':') (name_char* )
 
 let regexp ent = "&lt;" | "&gt;" | "&amp;" | "&quot;" | "&apos;"
 
