@@ -1,4 +1,4 @@
-OCAMLMAKEFILE = OCamlMakefile
+OCAMLMAKEFILE = ../../OCamlMakefile
 
 SOURCES		= uni_data.ml uni_norm.ml stringprep.ml \
 		  sasl.ml xmpp.ml error.ml \
