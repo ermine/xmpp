@@ -1,7 +1,7 @@
 OCAMLMAKEFILE = ../../OCamlMakefile
 
 SOURCES		= uni_data.ml uni_norm.ml stringprep.ml \
-		  sasl.ml xmpp.ml error.ml \
+		  jid.mli jid.ml sasl.ml xmpp.ml error.ml \
 		  jeps.ml xdata.ml disco.ml xcommands.ml
 PACKS		= cryptokit xml
 PRE_TARGETS	= xmlstream.cmx xmlstream.cmo
@@ -13,7 +13,7 @@ TRASH		= xmlstream.cm* xmlstream.o
 
 include ../../Makefile.global
 include ../Makefile.inc
-LIBINSTALL_FILES += error.cmi jeps.cmi xcommands.cmi sasl.cmi stringprep.cmi xdata.cmi disco.cmi
+LIBINSTALL_FILES += jid.cmi jid.mli error.cmi jeps.cmi xcommands.cmi sasl.cmi stringprep.cmi xdata.cmi disco.cmi
 
 all: ncl bcl
 
