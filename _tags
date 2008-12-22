@@ -1,0 +1,2 @@
+<*.ml{i,}>: use_oldxml
+<xmlstream.ml>: camlp4o, use_ulex.syntax, use_ulex
