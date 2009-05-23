@@ -1,8 +1,9 @@
-(*                                                                          *)
-(* (c) 2004, Anastasia Gornostaeva. <ermine@ermine.pp.ru>                   *)
-(*                                                                          *)
+(*
+ * (c) 2004-2009, Anastasia Gornostaeva. <ermine@ermine.pp.ru>
+ *)
+
+open Light_xml
 open Xmpp
-open Xml
 
 exception UnknownError
 
@@ -159,12 +160,12 @@ let parse_stream_error els =
 
 let parse_error stanza =
    let err =
-      try Xml.get_by_xmlns stanza ~tag:"error" 
+      try get_by_xmlns stanza ~tag:"error" 
 	 "xurn:ietf:params:xml:ns:xmpp-stanzas" with Not_found ->
 	    get_tag stanza ["error"]
    in
    let type_ =
-      match try Xml.get_attr_s err "type" with _ -> "" with
+      match try get_attr_s err "type" with _ -> "" with
 	 | "cancel" -> `Cancel
 	 | "continue" -> `Continue
 	 | "modify" -> `Modify
@@ -202,7 +203,7 @@ let parse_error stanza =
       end;
       !cond, type_, !text, rest
 
-let make_error_reply (xml:Xml.element) ?(text:string option)
+let make_error_reply (xml:element) ?(text:string option)
       ?(text_lang:string option) ?specific_cond (error:error) =
    let code, err_type, cond = error_to_tuple error in
    let el1 =

@@ -1,10 +1,10 @@
 (*
- * (c) 2004, 2005, 2006 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
+ * (c) 2004-2009 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
  *)
 
 open Unix
+open Light_xml
 open Xmpp
-open Xml
 
 let os = (let f = open_process_in "uname -sr" in
           let answer = input_line f in

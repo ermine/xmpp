@@ -1,8 +1,8 @@
 (*
- * (c) 2004, 2005, 2006 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
+ * (c) 2004-2009 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
  *)
 
-open Xml
+open Light_xml
 
 exception AuthError of string
 exception Failure of string
@@ -89,7 +89,7 @@ let sasl_digest next_xml out server username password =
    out (Xmlelement ("auth", ["xmlns", ns_sasl; "mechanism", "DIGEST-MD5"], []));
    let chl = next_xml () in
       if get_tag_by_ns chl = "challenge" then
-	 let ch_text = Xml.get_cdata chl in
+	 let ch_text = get_cdata chl in
 	 let resp = sasl_digest_response ch_text username server password in
 	    out (Xmlelement ("response", ["xmlns", ns_sasl], [Xmlcdata resp]));
 	    let p = next_xml () in
