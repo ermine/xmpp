@@ -82,7 +82,7 @@ let open_stream_client send_raw read_raw server username password resource =
                   else
                     raise (XMPPError "Resource binding failed")
                     
-let open_stream_service send_raw read_raw server name password =
+let open_stream_service send_raw read_raw server _name password =
   let stream next_xml =
     match next_xml () with
       | Element el -> el
@@ -214,7 +214,7 @@ let iq_info xml =
           (let subel = List.find (fun i ->
                                     match i with
                                       | Xmlelement _ -> true
-                                      | _ -> false
+                                      | Xmlcdata _ -> false
                                  ) (get_subels xml) in
              try get_attr_s subel "xmlns" with Not_found -> 
                raise  InvalidStanza)
@@ -224,7 +224,7 @@ let iq_info xml =
             let subel = List.find (fun i ->
                                      match i with
                                        | Xmlelement _ -> true
-                                       | _ -> false
+                                       | Xmlcdata _ -> false
                                   ) (get_subels xml) in
               get_attr_s subel "xmlns"
           with Not_found -> ""
@@ -249,14 +249,14 @@ let iq_reply ?type_ ?lang ?subels xml =
                | Some news ->
                    match List.find (function
                                       | Xmlelement _ -> true
-                                      | _ -> false
+                                      | Xmlcdata _ -> false
                                    ) subels1 with
                      | Xmlelement (qn, qa, _) ->
                          Xmlelement ("iq", newattrs,
                                      [Xmlelement (qn, qa, news)])
-                     | _ -> raise NonXmlelement
+                     | Xmlcdata _ -> raise NonXmlelement
           )
-    | _ -> raise NonXmlelement
+    | Xmlcdata _ -> raise NonXmlelement
         
 let make_iq ?to_ ?from ?(query_tag="query") ?xmlns ?exattrs ?subels ?lang ~id 
     ~type_ () =

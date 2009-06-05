@@ -42,7 +42,7 @@ let create read_raw =
             get_childs name attrs els (Xmlparser.parse newstate)
       | EndOfData ->
           raise End_of_file
-      | _ ->
+      | Doctype _ ->
           failwith "Unexpected tag in epilogue"
   in
 
@@ -89,7 +89,7 @@ let create read_raw =
             raise (XmlError "expected stream:stream")
       | EndElement name ->
           failwith ("Unexpected </" ^ name ^ ">")
-      | Whitespace space ->
+      | Whitespace _spaces ->
           process_prolog (parse state)
       | Text _ ->
           failwith "Unexpected text"
