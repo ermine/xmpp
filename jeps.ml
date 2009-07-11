@@ -4,7 +4,7 @@
 
 open Unix
 open Light_xml
-open Xmpp
+open XMPP
 
 let os = (let f = open_process_in "uname -sr" in
           let answer = input_line f in

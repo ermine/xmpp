@@ -1,9 +1,8 @@
 (*
- * (c) 2004-2009, Anastasia Gornostaeva. <ermine@ermine.pp.ru>
+ * (c) 2004-2009 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
  *)
 
 open Light_xml
-open Xmpp
   
 exception UnknownError
 
@@ -207,18 +206,18 @@ let make_error_reply (xml:element) ?(text:string option)
     ?(text_lang:string option) ?specific_cond (error:error) =
   let code, err_type, cond = error_to_tuple error in
   let el1 =
-    Xmlelement (cond, ["xmlns", "urn:ietf:params:xml:ns:xmpp-stanzas"], []) in
+    make_element cond ["xmlns", "urn:ietf:params:xml:ns:xmpp-stanzas"] [] in
   let el2 =
     match text with
 	    | Some text ->
 	        [el1;
-	         Xmlelement ("text", 
-			                 ["xmlns", "urn:ietf:params:xml:ns:xmpp-stanzas";
-			                  "xml:lang", (match text_lang with
-					                             | None -> "en"
-					                             | Some lang -> lang)],
-			                 [Xmlcdata text])]
-	 | None -> [el1] in
+           make_element "text" 
+			       ["xmlns", "urn:ietf:params:xml:ns:xmpp-stanzas";
+			        "xml:lang", (match text_lang with
+					                   | None -> "en"
+					                   | Some lang -> lang)]
+			       [Xmlcdata text]]
+	    | None -> [el1] in
   let el3 =
     match specific_cond with
 	    | None -> el2
@@ -227,11 +226,14 @@ let make_error_reply (xml:element) ?(text:string option)
     
     match xml with
 	    | Xmlelement (name, attrs, subtags) ->
-	        let a = make_attrs_reply attrs ~type_:"error" in
-		        Xmlelement (name, a,
-                        subtags @ 
-				                  [Xmlelement
-                             ("error",["code", code;
-					                             "type", err_type], el3)])
+          let to_ = try List.assoc "to" attrs with Not_found -> ""
+          and from = try List.assoc "from" attrs with Not_found -> ""
+          and id = try List.assoc "id" attrs with Not_found -> ""
+          and lang = try List.assoc "xml:lang" attrs with Not_found -> "" in
+          let newattrs = List.filter (fun (k, v) -> v <> "")
+            ["from", to_; "to", from;
+             "id", id; "type", "error"; "xml:lang", lang] in
+            make_element name newattrs
+              (subtags @  [make_element "error" ["code", code;
+					                                       "type", err_type] el3])
 	    | Xmlcdata _ -> raise NonXmlelement
-          

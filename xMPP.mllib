@@ -1,9 +1,11 @@
 Uni_data
 Uni_norm
 Stringprep
-Xmpp
-Sasl
+xMPP_types
 Error
+Sasl
+XMPP_generic
+XMPP
 Jid
 Jeps
 Xdata

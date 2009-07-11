@@ -1,1 +1,1 @@
-<*.ml>: rectypes
+<*.ml>: -warn_error_A

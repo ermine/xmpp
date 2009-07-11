@@ -8,108 +8,80 @@ open Light_xml
 exception XmlError of string
   
 type t =
-  | StreamError of element list
+  | StreamStart of string * (string * string) list
   | StreamEnd
-  | Element of element
+  | Stanza of element
+  | Continue
 
-let create read_raw =
-
-  let rec get_childs name attrs els (state, tag) =
+let process_production stack state =
+  let add_child el =
+    match Stack.pop stack with
+      | Xmlelement (name, attrs, els) ->
+          Stack.push (Xmlelement (name, attrs, el :: els)) stack
+      | Xmlcdata _ ->
+          raise (XmlError "error in xmlstream.ml")
+  in
+  let rec aux_production (state, tag) =
     match tag with
-      | Whitespace text
+      | Whitespace text ->
+          if Stack.length stack > 1 then
+            add_child (Xmlcdata text);
+          aux_production (Xmlparser.parse state)
       | Text text ->
-          get_childs name attrs (Xmlcdata text :: els) (Xmlparser.parse state)
-      | StartElement (name', attrs') ->
-          let (state, el) =
-            get_childs name' attrs' [] (Xmlparser.parse state) in
-            get_childs name attrs (el :: els) (Xmlparser.parse state)
-      | EndElement name' ->
-          if name = name' then
-            (state, Xmlelement (name, attrs, List.rev els))
+          if Stack.length stack > 1 then
+            add_child (Xmlcdata text)
           else
-            failwith "Unmatched end element"
+            raise (XmlError "text between stanzas");
+          aux_production (Xmlparser.parse state)
       | Pi _
-      | Comment _ ->
-          get_childs name attrs els (Xmlparser.parse state)
-      | EndOfBuffer ->
-          let buf = read_raw () in
-          let newstate =
-            if buf = "" then
-              Xmlparser.set_finish state
-            else
-              Xmlparser.add_buffer state buf
-          in
-            get_childs name attrs els (Xmlparser.parse newstate)
-      | EndOfData ->
-          raise End_of_file
-      | Doctype _ ->
-          failwith "Unexpected tag in epilogue"
-  in
-
-  let rec get_stanza (state, tag) =
-    match tag with
-      | Pi _
-      | Comment _
       | Doctype _
-      | Text _
-      | Whitespace _ ->
-          get_stanza (parse state)
+      | Comment _ ->
+          aux_production (Xmlparser.parse state)
       | StartElement (name, attrs) ->
-          let (state, el) =
-            get_childs name attrs [] (Xmlparser.parse state) in
-            ((state, get_stanza), Element el)
-      | EndElement name ->
-          if name = "stream:stream" then
-            ((state, process_prolog), StreamEnd)
+          Stack.push (Xmlelement (name, attrs, [])) stack;
+          if Stack.length stack = 1 then
+            ((state, stack), StreamStart (name, attrs))
           else
-            failwith ("Unexpected end element " ^ name)
-      | EndOfBuffer ->
-          let buf = read_raw () in
-          let newstate =
-            if buf = "" then
-              Xmlparser.set_finish state
-            else
-              Xmlparser.add_buffer state buf
-          in
-            get_stanza (Xmlparser.parse newstate)
-      | EndOfData ->
-          ((state, process_prolog), StreamEnd)
-
-  and process_prolog (state, tag) =
-   match tag with
-      | Pi _
-      | Comment _
-      | Doctype _ ->
-          process_prolog (parse state)
-      | StartElement (name, attrs) ->
-          if name = "stream:stream" then
-            ((state, get_stanza),
-             Element (Xmlelement ("stream:stream", attrs, [])))
-          else
-            raise (XmlError "expected stream:stream")
+            aux_production (Xmlparser.parse state)
       | EndElement name ->
-          failwith ("Unexpected </" ^ name ^ ">")
-      | Whitespace _spaces ->
-          process_prolog (parse state)
-      | Text _ ->
-          failwith "Unexpected text"
+          if Stack.length stack > 0 then
+            match Stack.pop stack with
+              | Xmlelement (name', _attrs, _els) as el ->
+                  if name = name' then
+                    if Stack.length stack = 0 then
+                      ((state, stack), StreamEnd)
+                    else if Stack.length stack = 1 then
+                      ((state, stack), Stanza el)
+                    else (
+                      add_child el;
+                      aux_production (Xmlparser.parse state)
+                    )
+                  else
+                    raise (XmlError "unmatched end tag");
+              | Xmlcdata _ ->
+                  raise (XmlError "error in xmlstream.ml")
+          else
+            raise (XmlError "end tag")
       | EndOfBuffer ->
-          let buf = read_raw () in
-          let newstate =
-            if buf = "" then
-              Xmlparser.set_finish state
-            else
-              Xmlparser.add_buffer state buf
-          in
-            process_prolog (Xmlparser.parse newstate)
+          ((state, stack), Continue)
       | EndOfData ->
-          ((state, process_prolog), StreamEnd)
+          if Stack.length stack < 2 then
+            ((state, stack), StreamEnd)
+          else
+            raise End_of_file
   in
+    aux_production (Xmlparser.parse state)
 
+let create () =
+  let stack = Stack.create () in
   let state = Xmlparser.create ~encoding:"UTF-8" () in
-  let p = ref (state, process_prolog) in
-    fun () ->
-      let state, callback = !p in
-      let (ss, tag) = callback (Xmlparser.parse state) in
-        p := ss;
-        tag
+    (state, stack)
+
+let add_buffer p buf =
+  let (state, stack) = p in
+  let newstate = Xmlparser.add_buffer state buf in
+    (newstate, stack)
+
+let parse p =
+  let (state, stack) = p in
+    process_production stack state
