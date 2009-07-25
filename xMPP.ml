@@ -30,10 +30,14 @@ struct
       if size = 0 then (
         close_in inch;
         return ""
-      ) else
-        return (String.sub string 0 size)
+      ) else (
+        let s = String.sub string 0 size in
+          print_endline s;
+          return s
+      )
           
   let send ouch string =
+    print_endline string;
     output_string ouch string;
     flush ouch;
     return ()

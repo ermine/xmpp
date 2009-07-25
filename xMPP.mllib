@@ -2,12 +2,11 @@ Uni_data
 Uni_norm
 Stringprep
 xMPP_types
-Error
+StreamError
+StanzaError
 Sasl
 XMPP_generic
 XMPP
 Jid
 Jeps
-Xdata
-Xcommand
-Disco
+

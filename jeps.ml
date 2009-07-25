@@ -3,37 +3,42 @@
  *)
 
 open Unix
-open Light_xml
+open Xml
 open XMPP
 
 let os = (let f = open_process_in "uname -sr" in
           let answer = input_line f in
             ignore (close_process_in f); answer)
 
+let ns_version = Some "jabber:iq:version"
+
 let iq_version_reply name version xml =
-  iq_reply ~subels:[make_simple_cdata "name" name;
-		                make_simple_cdata "version"
-			                (Printf.sprintf "%s (Ocaml %s)" 
-			                   version Sys.ocaml_version);
-		                make_simple_cdata "os" os
-		               ] xml
+  make_iq_reply ~payload:
+    [make_element (ns_version, "query") []
+       [make_simple_cdata (ns_version, "name") name;
+		    make_simple_cdata (ns_version, "version")
+			    (Printf.sprintf "%s (Ocaml %s)" 
+			       version Sys.ocaml_version);
+		    make_simple_cdata (ns_version, "os") os]
+		] xml
 
 (* JEP 54 vCard-temp *)
 
-let iq_vcard_query ?from ?lang ~id to_ =
-  make_iq ~id ?from ~to_ ~type_:`Get ?lang 
-    ~xmlns:"vcard-temp" ~query_tag:"vCard" ()
+let ns_vcard = Some "vcard-temp"
+
+let iq_vcard_query ?jid_from ?lang ~id jid_to =
+  make_iq ~id ?jid_from ~jid_to ~type_:`Get ?lang
+    ~payload:[make_element (ns_vcard, "vcard") [] []] ()
     
+let ns_last = Some "jabber:iq:last"
+
 let iq_last_reply start_time xml =
-  match xml with
-    | Xmlelement (_, attrs, _) ->
-	      let newattrs = make_attrs_reply ~type_:"result" attrs in
-	        Xmlelement ("iq", newattrs, 
-			                [Xmlelement ("query", ["xmlns", "jabber:iq:last";
-						                                 "seconds", 
-	                                           string_of_int (int_of_float ((Unix.gettimeofday ()) -. start_time))],
-				                           [])])
-    | Xmlcdata _ -> raise NonXmlelement
+  make_iq_reply ~type_:`Result
+    ~payload:[make_element (ns_last, "query")
+                [make_attr "seconds"
+                   (string_of_int (int_of_float
+                                     ((Unix.gettimeofday ()) -. start_time)))]
+                []] xml
 
 (* jep 90 *)
 (*

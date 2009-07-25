@@ -2,7 +2,7 @@
  * (c) 2004-2009 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
  *)
 
-open Light_xml
+open Xml
 open Xmlstream
 open XMPP_types
 
@@ -13,21 +13,17 @@ module Make (Network: NETWORK) =
 struct
   open Network
     
-  let ns_sasl = "urn:ietf:params:xml:ns:xmpp-sasl"
+  let ns_sasl = Some "urn:ietf:params:xml:ns:xmpp-sasl"
 
-  let raise_failure = function
-    | Xmlelement (_, _, els) ->
-	      let p = List.find (function
-	                           | Xmlelement (_, _, _) -> true
-	                           | Xmlcdata _ -> false) els in
-	        fail (Failure (get_tagname p))
-    | Xmlcdata _ ->
-	      fail NonXmlelement
+  let raise_failure el =
+    let p = get_first_element (get_children el) in
+	        fail (Failure (get_name (get_qname p)))
           
   let h s = Cryptokit.hash_string (Cryptokit.Hash.md5 ()) s
   let hex s = Cryptokit.transform_string (Cryptokit.Hexa.encode ()) s
     
-  let response_value ~username ~realm ~nonce ~cnonce ~qop ~nc ~digest_uri ~passwd =
+  let response_value ~username ~realm ~nonce ~cnonce ~qop ~nc ~digest_uri
+      ~passwd =
     let a1 =  (h ((username ^ ":" ^ realm ^ ":" ^ passwd))) ^
       ":" ^ nonce ^ ":" ^ cnonce
     and a2 = "AUTHENTICATE:" ^ digest_uri in
@@ -86,55 +82,83 @@ struct
       ()
         
   let sasl_digest p next_xml out server username password =
-    let rec get_challenge (p, tag) =
-      match tag with
-        | Stanza (Xmlelement ("challenge", _, _) as el) ->
+    let rec get_challenge = function
+      | Stanza el ->
+          if get_qname el = (ns_sasl, "challenge") then
 	          let ch_text = get_cdata el in
 	          let resp = sasl_digest_response ch_text username server password in
-	            out (make_element "response" ["xmlns", ns_sasl]
-                     [Xmlcdata resp]) >>= next_xml p >>= get_challenge2
-        | _ ->
-		        fail (AuthError "Invalid XMPProtocol")
-    and get_challenge2 (p, tag) =
-      match tag with
-        | Stanza (Xmlelement ("failure", _, _) as el) ->
-		        raise_failure el
-		    | Stanza (Xmlelement ("challenge", _, _) as el) ->
-		        sasl_digest_rspauth (get_cdata el);
-            out (make_element "response" ["xmlns", ns_sasl] []) >>=
-              next_xml p >>= check_success
-		    | Stanza (Xmlelement ("success", _, _)) ->
-		        return p
-		    | _ ->
-		        fail (AuthError "Invalid XMPProtocol")
-    and check_success (p, tag) =
-      match tag with
-        | Stanza (Xmlelement ("success", _, _)) ->
-            return p
-			  | Stanza (Xmlelement ("failure", _, _) as el) ->
-				    raise_failure el;
-			  | _ ->
-				    fail (AuthError "Invalid XMPProtocol")
+	            out (Xmlstream.stanza_serialize p
+                     (make_element (ns_sasl, "response") [] [Xmlcdata resp])) >>=
+                next_xml p >>= get_challenge2
+          else
+            fail (AuthError "Invalid XMPProtocol")
+      | _ ->
+		      fail (AuthError "Invalid XMPProtocol")
+    and get_challenge2 = function
+      | Stanza el ->
+          let qname = get_qname el in
+            if get_namespace qname = ns_sasl then
+              match get_name qname with
+                | "failure" ->
+		                raise_failure el
+                | "challenge" ->
+		                sasl_digest_rspauth (get_cdata el);
+                    out (Xmlstream.stanza_serialize p
+                           (make_element (ns_sasl, "response") [] [])) >>=
+                      next_xml p >>= check_success
+                | "success" ->
+		                return p
+                | _ ->
+                    fail (AuthError "Invalid XMPProtocol")
+            else
+              fail (AuthError "Invalid XMPProtocol")
+		  | _ ->
+		      fail (AuthError "Invalid XMPProtocol")
+    and check_success = function
+      | Stanza el ->
+          let qname = get_qname el in
+            if get_namespace qname = ns_sasl then
+              match get_name qname with
+                | "success" ->
+                    return p
+                | "failure" ->
+				            raise_failure el;
+			          | _ ->
+				            fail (AuthError "Invalid XMPProtocol")
+            else
+				      fail (AuthError "Invalid XMPProtocol")
+      | _ ->
+				  fail (AuthError "Invalid XMPProtocol")
     in
-      out (make_element "auth" ["xmlns", ns_sasl; "mechanism", "DIGEST-MD5"] [])
-      >>= next_xml p >>= get_challenge
+      out (Xmlstream.stanza_serialize p
+             (make_element (ns_sasl, "auth")
+                [make_attr "mechanism" "DIGEST-MD5"] [])) >>=
+        next_xml p >>= get_challenge
         
   let sasl_plain p next_xml out server username password =
     let sasl_data = 
       Cryptokit.transform_string (Cryptokit.Base64.encode_compact  ())
 	      (Printf.sprintf "%s\x00%s\x00%s"
 	         (username ^ "@" ^ server) username password)  ^ "==" in
-      out (make_element "auth" ["xmlns", ns_sasl; "mechanism", "PLAIN"]
-             [Xmlcdata sasl_data]) >>=
+      out (Xmlstream.stanza_serialize p
+             (make_element (ns_sasl, "auth")
+                [make_attr "mechanism" "PLAIN"] [Xmlcdata sasl_data])) >>=
         next_xml p >>=
-          (fun (p, tag) ->
-             match tag with
-	             | Stanza (Xmlelement ("failure", _, _) as el) ->
-		               raise_failure el
-	             | Stanza (Xmlelement ("success", _, _)) ->
-		               return p
-               | _ ->
-		               fail (AuthError "Invalid XMPProtocol")
+          (function
+             | Stanza el ->
+                 let qname = get_qname el in
+                   if get_namespace qname = ns_sasl then
+                     match get_name qname with
+                       | "failure" ->
+		                       raise_failure el
+                       | "success" ->
+		                       return p
+                       | _ ->
+                           fail (AuthError "Invalid XMPProtocol")
+                   else
+                     fail (AuthError "Invalid XMPProtocol")
+             | _ ->
+		             fail (AuthError "Invalid XMPProtocol")
           )
 
   (*

@@ -3,85 +3,149 @@
  *)
 
 open Xmlparser
-open Light_xml
+open Xml
+open Xml.Serialization
 
 exception XmlError of string
   
-type t =
-  | StreamStart of string * (string * string) list
+type data =
+  | StreamStart of qname * attribute list
   | StreamEnd
   | Stanza of element
   | Continue
 
-let process_production stack state =
+type t = {
+  namespaces: (prefix, namespace) Hashtbl.t;
+  stack_ns: (qname * (namespace * prefix) list) Stack.t;
+  stack: element Stack.t;
+  mutable xparser: Xmlparser.parser_t;
+  ser: Serialization.t
+}
+
+let process_production p =
   let add_child el =
-    match Stack.pop stack with
+    match Stack.pop p.stack with
       | Xmlelement (name, attrs, els) ->
-          Stack.push (Xmlelement (name, attrs, el :: els)) stack
+          Stack.push (Xmlelement (name, attrs, el :: els)) p.stack
       | Xmlcdata _ ->
           raise (XmlError "error in xmlstream.ml")
   in
-  let rec aux_production (state, tag) =
+  let rec aux_production (xparser, tag) =
     match tag with
       | Whitespace text ->
-          if Stack.length stack > 1 then
+          if Stack.length p.stack > 1 then
             add_child (Xmlcdata text);
-          aux_production (Xmlparser.parse state)
+          aux_production (Xmlparser.parse xparser)
       | Text text ->
-          if Stack.length stack > 1 then
+          if Stack.length p.stack > 1 then
             add_child (Xmlcdata text)
           else
             raise (XmlError "text between stanzas");
-          aux_production (Xmlparser.parse state)
+          aux_production (Xmlparser.parse xparser)
       | Pi _
       | Doctype _
       | Comment _ ->
-          aux_production (Xmlparser.parse state)
+          aux_production (Xmlparser.parse xparser)
       | StartElement (name, attrs) ->
-          Stack.push (Xmlelement (name, attrs, [])) stack;
-          if Stack.length stack = 1 then
-            ((state, stack), StreamStart (name, attrs))
-          else
-            aux_production (Xmlparser.parse state)
+          let lnss, attrs = split_attrs attrs in
+            add_namespaces p.namespaces lnss;
+            let attrs =  parse_attrs p.namespaces attrs in
+            let qname = parse_qname p.namespaces (split_name name) in
+              Stack.push (qname, lnss) p.stack_ns;
+              Stack.push (Xmlelement (qname, attrs, [])) p.stack;
+              if Stack.length p.stack = 1 then (
+                p.xparser <- xparser;
+                StreamStart (qname, attrs)
+              )
+              else
+                aux_production (Xmlparser.parse xparser)
       | EndElement name ->
-          if Stack.length stack > 0 then
-            match Stack.pop stack with
-              | Xmlelement (name', _attrs, _els) as el ->
-                  if name = name' then
-                    if Stack.length stack = 0 then
-                      ((state, stack), StreamEnd)
-                    else if Stack.length stack = 1 then
-                      ((state, stack), Stanza el)
-                    else (
-                      add_child el;
-                      aux_production (Xmlparser.parse state)
-                    )
-                  else
-                    raise (XmlError "unmatched end tag");
-              | Xmlcdata _ ->
-                  raise (XmlError "error in xmlstream.ml")
+          if not (Stack.is_empty p.stack) then
+            let qname' = parse_qname p.namespaces (split_name name) in
+             let (qname, lnss) = Stack.pop p.stack_ns in
+               if qname' = qname then (
+                 remove_namespaces p.namespaces lnss;
+                 match Stack.pop p.stack with
+                   | Xmlelement (qname, _attrs, _els) as el ->
+                       if qname = qname' then
+                         if Stack.is_empty p.stack then (
+                           p.xparser <- xparser;
+                           StreamEnd
+                         ) else if Stack.length p.stack = 1 then (
+                           p.xparser <- xparser;
+                           Stanza el
+                         ) else (
+                           add_child el;
+                           aux_production (Xmlparser.parse xparser)
+                         )
+                       else
+                         raise (XmlError "unmatched end tag");
+                   | Xmlcdata _ ->
+                       raise (XmlError "error in xmlstream.ml")
+               )
+               else
+                 raise (XmlError "end tag")
           else
             raise (XmlError "end tag")
       | EndOfBuffer ->
-          ((state, stack), Continue)
+          p.xparser <- xparser;
+          Continue
       | EndOfData ->
-          if Stack.length stack < 2 then
-            ((state, stack), StreamEnd)
-          else
+          if Stack.length p.stack < 2 then (
+            p.xparser <- xparser;
+            StreamEnd
+          ) else
             raise End_of_file
   in
-    aux_production (Xmlparser.parse state)
+    aux_production (Xmlparser.parse p.xparser)
 
-let create () =
-  let stack = Stack.create () in
-  let state = Xmlparser.create ~encoding:"UTF-8" () in
-    (state, stack)
+let create default_nss =
+  {
+    namespaces = Hashtbl.create 1;
+    stack_ns = Stack.create ();
+    stack = Stack.create ();
+    xparser = Xmlparser.create ~encoding:"UTF-8" ();
+    ser = Xml.Serialization.create default_nss
+  }
+
+let bind_prefix p prefix namespace =
+  Xml.Serialization.bind_prefix p.ser prefix namespace
 
 let add_buffer p buf =
-  let (state, stack) = p in
-  let newstate = Xmlparser.add_buffer state buf in
-    (newstate, stack)
+  let newparser = Xmlparser.add_buffer p.xparser buf in
+    p.xparser <- newparser
 
-let parse p =
-  let (state, stack) = p in
-    process_production stack state
+let parse p = process_production p
+
+let stanza_serialize p el =
+  let buf = Buffer.create 30 in
+  let out = Buffer.add_string buf in
+    aux_serialize [] p.ser out el;
+    Buffer.contents buf
+  
+let stream_header p qname attrs =
+  let buf = Buffer.create 30 in
+  let out = Buffer.add_string buf in
+    out "<?xml version='1.0'?>";
+    out "<";
+    out (string_of_qname p.ser qname);
+    if attrs <> [] then (
+      out " ";
+      out (string_of_list (string_of_attr p.ser) " " attrs)
+    );
+    let lnss = local_namespaces p.ser qname attrs p.ser.default_nss in
+      if lnss <> [] then (
+        out " ";
+        out (string_of_list (string_of_ns p.ser) " " p.ser.default_nss)
+      );
+      out ">";
+      Buffer.contents buf
+      
+let stream_end p qname =
+  let buf = Buffer.create 30 in
+  let out = Buffer.add_string buf in
+    out "</";
+    out (string_of_qname p.ser qname);
+    out ">";
+    Buffer.contents buf
+  

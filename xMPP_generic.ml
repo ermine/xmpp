@@ -9,239 +9,239 @@ struct
   
   open Network
   open Xmlstream
-  open Light_xml
+  open Xml
 
   module SASL = Sasl.Make(Network)
 
   exception Error of string
-  exception StreamError of element list
-  exception InvalidStanza
+  exception StreamError of StreamError.t
+  exception MalformedStanza
   exception InvalidProtocol
 
-  let send_xml out (el:element) = out (element_to_string el)
+  let ns_streams = Some "http://etherx.jabber.org/streams"
+  let ns_server = Some "jabber:server"
+  let ns_client = Some "jabber:client"
+  let ns_tls = Some "urn:ietf:params:xml:ns:xmpp-tls"
+  let ns_sasl = Some "urn:ietf:params:xml:ns:xmpp-sasl"
+  let ns_bind = Some "urn:ietf:params:xml:ns:xmpp-bind"
+  let ns_session = Some "urn:ietf:params:xml:ns:xmpp-session"
 
-  let close_stream out =
-    out "</stream:stream>"
-
-  type stream_t = Client | ComponentAccept | ComponentConnect
-
-  let start_stream ?streamtype server =
-    "<?xml version='1.0' ?><stream:stream version='1.0' to='" ^ server ^
-      "' xmlns='" ^ 
-      (match streamtype with
-         | None -> "jabber:client"
-         | Some t -> match t with
-             | Client -> "jabber:client"
-             | ComponentAccept -> "jabber:component:accept"
-             | ComponentConnect -> "jabber:component:connect")
-    ^ "' xmlns:stream='http://etherx.jabber.org/streams'>"
-
+  let get_type el = get_attr_value "type" (get_attrs el)
+  let get_id el = get_attr_value "id" (get_attrs el)
+  let get_from el = get_attr_value "from" (get_attrs el)
+  let get_to el = get_attr_value "to" (get_attrs el)
+  let get_lang el = get_attr_value ~ns:ns_xml "lang" (get_attrs el)
+    
   let rec next_xml inch p () =
-    let newp, tag = Xmlstream.parse p in
-      match tag with
-        | Stanza (Xmlelement ("stream:error", _, els)) ->
-            fail (StreamError els)
-        | Stanza el ->
-            return (newp, Stanza el)
-        | StreamStart (name, attrs) ->
-            return (newp, StreamStart (name, attrs))
-        | StreamEnd ->
-            fail End_of_file
-        | Continue ->
-            read inch >>=
-              (fun buf ->
-                 let newp = Xmlstream.add_buffer newp buf in
-                   next_xml inch newp ())
-
+    match Xmlstream.parse p with
+      | Stanza el ->
+          if get_qname el = (ns_streams, "error") then
+            fail (StreamError (StreamError.parse_error el))
+          else
+            return (Stanza el)
+      | StreamStart (name, attrs) ->
+          return (StreamStart (name, attrs))
+      | StreamEnd ->
+          fail End_of_file
+      | Continue ->
+          read inch >>=
+            (fun buf ->
+               Xmlstream.add_buffer p buf;
+               next_xml inch p ())
+              
   let open_stream_client server port username password resource =
     connect server port >>=
       (fun (inch, ouch) ->
-         let rec check_stream_header (p, tag) =
-           match tag with
-             | StreamStart ("stream:stream", _attrs) ->
-                 next_xml inch p ()
-             | _ ->
-                 fail (Error "bad protocol")
-         and check_stream_features (p, tag) =
-           match tag with
-             | Stanza (Xmlelement ("stream:features", _, _) as el) ->
-                 let mechanisms = get_tag el ["mechanisms"] in
-                 let mels = get_subels ~tag:"mechanism" mechanisms in
-                 let m = List.map
-                   (function x -> get_cdata x) mels in
-                   SASL.auth p (next_xml inch) (send_xml (send ouch))
+         let p = Xmlstream.create [ns_streams; ns_client] in
+         let () = Xmlstream.bind_prefix p "stream" ns_streams in
+         let rec check_stream_header = function
+           | StreamStart (qname, attrs) ->
+               if qname = (ns_streams, "stream") &&
+                 get_attr_value "version" attrs  = "1.0" then
+                   next_xml inch p ()
+               else
+                 fail (Error "bad stream header")
+           | _ ->
+               fail (Error "bad protocol")
+         and check_stream_features = function
+           | Stanza (Xmlelement (qname, _, _) as el) ->
+               print_endline "start stream";
+               if qname = (ns_streams, "features") then
+                 let mechanisms = get_subelement (ns_sasl, "mechanisms") el in
+                 let mels = get_subelements (ns_sasl, "mechanism") mechanisms in
+                 let m = List.map get_cdata mels in
+                   SASL.auth p (next_xml inch) (send ouch)
                      m server username password >>=
                      new_stream
-             | _ ->
+               else
                  fail (Error "hm")
+           | _ ->
+               fail (Error "hm")
          and new_stream _p =
-           let p = Xmlstream.create () in
-             send ouch (start_stream server) >>= 
+           let p = Xmlstream.create [ns_streams; ns_client] in
+           let () = bind_prefix p "stream" ns_streams in
+             send ouch (Xmlstream.stream_header p (ns_streams, "stream")
+                          [make_attr "to" server; make_attr "version" "1.0"]) >>=
                next_xml inch p >>= check_stream_header >>=
-                 (fun (p, tag) ->
-                    match tag with
-                      | Stanza (Xmlelement ("stream:features", _, _) as el) ->
-                          let _bind = get_tag el ["bind"] in
-                            send_xml (send ouch)
-                              (make_element "iq" ["type", "set";
-                                                  "to", server; "id", "bind1"]
-                                 [make_element "bind" ["xmlns",
-                                             "urn:ietf:params:xml:ns:xmpp-bind"]
-                                     [make_simple_cdata "resource" 
-                                        resource]]) >>=
+                 (function
+                    | Stanza el ->
+                        if get_qname el = (ns_streams, "features") &&
+                          mem_child (ns_bind, "bind") el then
+                            send ouch
+                              (Xmlstream.stanza_serialize p
+                                 (make_element (ns_client, "iq")
+                                    [make_attr "type" "set";
+                                     make_attr "to" server;
+                                     make_attr "id" "bind1"]
+                                    [make_element (ns_bind, "bind")
+                                       []
+                                       [make_simple_cdata
+                                          (ns_client, "resource") 
+                                          resource]])) >>=
                               next_xml inch p >>= get_bind
-                       | _ ->
-                           fail (Error "no bind")
-                  )
-         and get_bind (p, tag) =
-           match tag with
-             | Stanza (Xmlelement ("iq", attrs, els) as el) ->
-                 if get_attr_s el "type" = "result" &&
-                   get_attr_s el "id" = "bind1" then
-                     let myjid = get_cdata ~path:["bind";"jid"] el in
-                       send_xml (send ouch)
-                         (make_element "iq"
-                            ["from", myjid; "type", "set"; "id", "session1"]
-                            [make_element "session"
-                               ["xmlns", "urn:ietf:params:xml:ns:xmpp-session"]
-                               []]) >>= next_xml inch p >>= get_session myjid
-                 else
-                   fail (Error "Resource binding failed")
-             | _ ->
+                        else
+                          fail (Error "no bind")
+                    | _ ->
+                        fail (Error "no bind")
+                 )
+         and get_bind = function
+           | Stanza (Xmlelement (qname, attrs, els) as el) ->
+               if qname = (ns_client, "iq") &&
+                 safe_get_attr_value "type" attrs = "result" &&
+                 safe_get_attr_value "id" attrs = "bind1" then
+                   let myjid = get_cdata
+                     (get_subelement (ns_bind, "jid")
+                        (get_element (ns_bind, "bind") els)) in
+                     send ouch
+                       (Xmlstream.stanza_serialize p
+                          (make_element (ns_client, "iq")
+                             [make_attr "from" myjid;
+                              make_attr "type" "set";
+                              make_attr "id" "session1"]
+                             [make_element (ns_session, "session") [] []])
+                       ) >>= next_xml inch p >>= get_session myjid
+               else
                  fail (Error "Resource binding failed")
-         and get_session myjid (p, tag) =
-           match tag with
-             | Stanza (Xmlelement ("iq", attrs, _) as el) ->
-                 if get_attr_s el "type" = "result" &&
-                   get_attr_s el "id" = "session1" then
-                     return (myjid, p, inch, ouch)
-                 else
-                   fail (Error "Session binding failed")
-             | _ ->
+           | _ ->
+               fail (Error "Resource binding failed")
+         and get_session myjid = function
+           | Stanza (Xmlelement (qname, attrs, _)) ->
+               if qname = (ns_client, "iq") &&
+                 get_attr_value "type" attrs = "result" &&
+                 get_attr_value "id" attrs = "session1" then
+                   return (myjid, p, inch, ouch)
+               else
                  fail (Error "Session binding failed")
+           | _ ->
+               fail (Error "Session binding failed")
          in
-         let p = Xmlstream.create () in
-           send ouch (start_stream server) >>= next_xml inch p >>=
-             check_stream_header >>= check_stream_features
+           send ouch (stream_header p (ns_streams, "stream")
+                        [make_attr "to" server;
+                         make_attr "version" "1.0"]) >>=
+             next_xml inch p >>=
+               check_stream_header >>=
+                 check_stream_features
       )
-      
+        
         
   (*********)
                           
-  let get_xmlns xml =
-    let subel = List.find (function
-                             | Xmlelement (_, _, _) -> true
-                             | Xmlcdata _ -> false
-                          ) (get_subels xml) in
-      get_attr_s subel "xmlns"
-        
   let make_attrs_reply ?lang ?type_ attrs =
-    let to_ = try List.assoc "to" attrs with Not_found -> ""
-    and from = try List.assoc "from" attrs with Not_found -> "" in
-
-    let a1 = List.remove_assoc "to" attrs in
-    let a2 = List.remove_assoc "from" a1 in
-
-    let a3 = filter_attrs (("from", to_) :: ("to", from) :: a2) in
-    let a4 = match lang with
-      | None -> a3
-      | Some l ->
-          ("xml:lang", l) :: List.remove_assoc "xml:lang" a3 in
+    let jid_to = safe_get_attr_value "to" attrs
+    and jid_from = safe_get_attr_value "from" attrs
+    and id = safe_get_attr_value "id" attrs 
+    and type_ = (
       match type_ with
-        | None -> a4
-        | Some d ->
-            let a5 = List.remove_assoc "type" a4 in
-            let a6 = if d <> "" then ("type", d) :: a5 else a5 in
-              a6
-                
-  type iq_type = [`Get | `Set | `Result | `Error]
-      
-  let iq_info xml =
-    let id = try get_attr_s xml "id" with Not_found -> "" in
-    let type_ = match safe_get_attr_s xml "type" with
-      | "get" -> `Get
-      | "set" -> `Set
-      | "result" -> `Result
-      | "error" -> `Error
-      | _ -> raise InvalidStanza in
-    let xmlns =
-      match type_ with
-        | `Get
-        | `Set -> 
-            (let subel = List.find (fun i ->
-                                      match i with
-                                        | Xmlelement _ -> true
-                                        | Xmlcdata _ -> false
-                                   ) (get_subels xml) in
-               try get_attr_s subel "xmlns" with Not_found -> 
-                 raise  InvalidStanza)
-        | `Result
-        | `Error ->
-            try
-              let subel = List.find (fun i ->
-                                       match i with
-                                         | Xmlelement _ -> true
-                                         | Xmlcdata _ -> false
-                                    ) (get_subels xml) in
-                get_attr_s subel "xmlns"
-            with Not_found -> ""
-    in
-      id, type_, xmlns
+        | None -> safe_get_attr_value "type" attrs
+        | Some v -> v)
+    and lang = (
+      match lang with
+        | None -> safe_get_attr_value ~ns:ns_xml "lang" attrs
+        | Some v -> v) in
+      List.fold_left (fun acc (k,v) ->
+                        if v <> "" then
+                          (make_attr k v) :: acc
+                        else
+                          acc
+                     )
+        (if lang = "" then [] else [make_attr ~ns:ns_xml "lang" lang])
+        ["to", jid_from;
+         "from", jid_to;
+         "id", id;
+         "type", type_]
         
-  let iq_reply ?type_ ?lang ?subels xml =
-    match xml with
-      | Xmlelement (_, attrs, subels1) ->
-          let newtype = match type_ with
-            | None -> "result"
-            | Some t ->
-                match t with
-                  | `Result -> "result"
-                  | `Get -> "get"
-                  | `Set -> "set"
-                  | `Error -> "error"
-          in
-            (let newattrs = make_attrs_reply attrs ?lang ~type_:newtype in
-               match subels with
-                 | None -> make_element "iq" newattrs subels1
-                 | Some news ->
-                     match List.find (function
-                                        | Xmlelement _ -> true
-                                        | Xmlcdata _ -> false
-                                     ) subels1 with
-                       | Xmlelement (qn, qa, _) ->
-                           make_element "iq" newattrs [make_element qn qa news]
-                       | Xmlcdata _ -> raise NonXmlelement
-            )
-      | Xmlcdata _ -> raise NonXmlelement
-          
-  let make_iq ?to_ ?from ?(query_tag="query") ?xmlns ?exattrs ?subels ?lang ~id 
-      ~type_ () =
-    let a1 = [("id", id); ("type", match type_ with
-                             | `Get -> "get"
-                             | `Set -> "set"
-                             | `Result -> "result"
-                             | `Error -> "error")] in
-    let a2 = match from with
-      | None -> a1
-      | Some f -> ["from", f] in
-    let a3 = match to_ with
-      | None -> a2
-      | Some t -> ("to", t) :: a2 in
-    let a4 = match lang with
-      | None -> a3
-      | Some l -> ("xml:lang", l) :: a3 in
+  type id = string
       
-    let s1 = match xmlns with
-      | None -> []
-      | Some x -> [make_element query_tag
-                     (("xmlns", x) :: (match exattrs with
-                                         | None -> []
-                                         | Some ex -> ex))
-                     (match subels with
-                        | None -> []
-                        | Some s -> s)]
+  type iq_type = [`Get | `Set | `Result | `Error]
+
+  let string_of_iq_type = function
+    | `Get -> "get"
+    | `Set -> "set"
+    | `Result -> "result"
+    | `Error -> "error"
+
+  let iq_type_of_string = function
+    | "get" -> `Get
+    | "set" -> `Set
+    | "result" -> `Result
+    | "error" -> `Error
+    | _ -> raise (Error "invalid iq type")
+
+  type iq_info =
+    | IqSet of element
+    | IqGet of element
+    | IqResult of element option
+    | IqError of StanzaError.t
+        
+  let iq_info = function
+    | Xmlelement (qname, attrs, els) -> (
+        match safe_get_attr_value "type" attrs with
+          | "get" ->
+              IqGet (get_first_element els)
+          | "set" ->
+              IqSet (get_first_element els)
+          | "result" ->
+              IqResult (try Some (get_first_element els) with Not_found -> None)
+          | "error" -> (
+              try
+                let el = get_element (ns_client, "error") els in
+                  IqError (StanzaError.parse_error el)
+              with Not_found -> raise MalformedStanza
+            )
+          | _ -> raise MalformedStanza
+      )
+    | Xmlcdata _ -> raise NonXmlelement
+        
+  let make_iq_reply ?(type_=`Result) ?lang ?payload = function
+    | Xmlelement (qname, attrs, els) ->
+        let newtype = string_of_iq_type type_ in
+        let newattrs = make_attrs_reply attrs ?lang ~type_:newtype in
+          (match payload with
+             | None -> make_element qname newattrs els
+             | Some newels -> make_element qname newattrs newels)
+    | Xmlcdata _ -> raise NonXmlelement
+    
+  let make_iq ~ns ~id ?jid_to ?jid_from ?payload ?lang ~type_ () =
+    let attrs =
+      List.fold_left (fun acc (k,v) ->
+                        if v <> "" then
+                          make_attr k v :: acc
+                        else
+                          acc
+                     )
+        (match lang with
+           | None -> []
+           | Some v -> [make_attr ~ns:ns_xml "lang" v])
+        ["to",  (match jid_to with | None -> "" | Some v -> v);
+         "from", (match jid_from with | None -> "" | Some v -> v);
+         "id", id;
+         "type", string_of_iq_type type_]
     in
-      make_element "iq" a4 s1
+      make_element (ns, "iq") attrs
+        (match payload with
+           | None -> []
+           | Some v -> v)
+        
         
   type presence_show_t = [
   | `Chat
@@ -250,120 +250,153 @@ struct
   | `XA
   | `Online
   ]
-      
-  type presence_t = [
+
+  type presence_type = [
   | `Probe
   | `Subscribe
   | `Subscribed
   | `Unsubscribe
   | `Unsubscribed
   | `Unavailable
-  | `Available of presence_show_t
+  | `Available
   | `Error
   ]
 
-  let presence_info xml =
-    let t = match safe_get_attr_s xml "type" with
-      | "probe" -> `Probe
-      | "subscribe" -> `Subscribe
-      | "subscribed" -> `Subscribed
-      | "unsubscribe" -> `Unsubscribe
-      | "unsubscribed" -> `Unsubscribed
-      | "unavailable" -> `Unavailable
-      | "error" -> `Error
-      | _ ->
-          let show = 
-            match try get_cdata ~path:["show"] xml with Not_found -> "" with
-              | "away" -> `Away
-              | "xa" -> `XA
-              | "dnd" -> `DND
-              | "chat" -> `Chat
-              | _ -> `Online
-          in
-            `Available show
-    in
-    let status = try get_cdata xml ~path:["status"] with 
-        Not_found -> "" in
-      t, status
+  let string_of_presence_type = function
+    | `Probe -> "probe"
+    | `Subscribe -> "subscribe"
+    | `Subscribed -> "subscribed"
+    | `Unsubscribe -> "unsubscribe"
+    | `Unsubscribed -> "unsubscribed"
+    | `Unavailable -> "unavailable"
+    | `Available -> ""
+    | `Error -> "error"
+
+  let presence_type_of_string = function
+    | "probe" -> `Probe
+    | "subscribe" -> `Subscribe
+    | "subscribed" -> `Subscribed
+    | "unsubscribe" -> `Unsubscribe
+    | "unsubscribed" -> `Unsubscribed
+    | "unavailable" -> `Unavailable
+    | "" -> `Available
+    | "error" -> `Error
+    | _ -> raise (Error "invalid presence type")
+      
+  let get_presence_type = function
+    | Xmlelement (_qname, attrs, _els) ->
+        presence_type_of_string (safe_get_attr_value "type" attrs)
+    | Xmlcdata _ ->
+        raise NonXmlelement
+
+  let get_presence_show ~ns = function
+    | Xmlelement (_, _, els) -> (
+        match try get_cdata (get_element (ns, "show") els) with Not_found -> ""
+        with
+          | "away" -> `Away
+          | "xa" -> `XA
+          | "dnd" -> `DND
+          | "chat" -> `Chat
+          | _ -> `Online              
+      )
+    | Xmlcdata _ ->
+        raise NonXmlelement
+
+  let get_presence_status ~ns = function
+    | Xmlelement (_qname, _attrs, els) -> (
+        try get_cdata (get_element (ns, "status") els) with Not_found -> ""
+      )
+    | Xmlcdata _ ->
+        raise NonXmlelement
         
-  let make_presence ?from ?to_ ?id ?type_ ?status ?subels ?lang () =
-    let a1 = match from with
-      | None -> []
-      | Some f -> ["from", f] in
-    let a2 = match to_ with
-      | None -> a1
-      | Some t -> ("to", t) :: a1 in
-    let a3 = match id with
-      | None -> a2
-      | Some i -> ("id", i) :: a2 in
-    let a4, s1 = match type_ with
-      | None -> a3, []
-      | Some p ->
-          match p with
-            | `Subscribe -> ("type", "subscribe") :: a3, []
-            | `Subscribed -> ("type", "subscribed") :: a3, []
-            | `Unsubscribe -> ("type", "unsubscribe") :: a3, []
-            | `Unsubscribed -> ("type", "unsubscribed") :: a3, []
-            | `Probe -> ("type", "probe") :: a3, []
-            | `Error -> ("type", "error") :: a3, []
-            | `Available show -> a3, 
-                (match show  with
-                   | None -> []
-                   | Some `Chat -> [make_simple_cdata "chat" ""]
-                   | Some `DND -> [make_simple_cdata "dnd" ""]
-                   | Some `Away -> [make_simple_cdata "away" ""]
-                   | Some `XA -> [make_simple_cdata "xa" ""])
-            | `Unavailable -> ("type", "unavailable") :: a3, [] in
-    let a5 = match lang with
-      | None -> a4
-      | Some l -> ("lang", l) :: a4 in
-    let s2 = match status with
-      | None -> s1
-      | Some s -> make_simple_cdata "status" s :: s1 in
-    let s3 = match subels with
-      | None -> s2
-      | Some s -> s2 @ s in
-      make_element "presence" a5 s3
+  let make_presence ~ns ?jid_from ?jid_to ?id ?type_
+      ?show ?status ?priority ?(subels=[]) ?lang () =
+    let attrs =
+      List.fold_left (fun acc (k,v) ->
+                        if v <> "" then
+                          make_attr k v :: acc
+                        else
+                          acc
+                     )
+        (match lang with
+           | None -> []
+           | Some v -> [make_attr ~ns:ns_xml "lang" v])
+        ["to",  (match jid_to with | None -> "" | Some v -> v);
+         "from", (match jid_from with | None -> "" | Some v -> v);
+         "id", (match id with | None -> "" | Some v -> v);
+         "type", (match type_ with
+                    | None -> ""
+                    | Some v ->string_of_presence_type v)]
+    in
+    let els =
+      List.fold_left (fun acc (k,v) ->
+                        match v with
+                          | None -> acc
+                          | Some v -> make_simple_cdata (ns, k) v :: acc
+                     ) subels
+        ["show", (match show with
+                    | None -> None
+                    | Some v ->
+                        match v with
+                          | `Chat -> Some "chat"
+                          | `Away -> Some "away"
+                          | `DND -> Some "dnd"
+                          | `XA -> Some "xa"
+                          | `Online -> None);
+         "status", status;
+         "priority", (match priority with
+                        | None -> None
+                        | Some i -> Some (string_of_int i))] in
+      make_element (ns, "presence") attrs els
         
   type message_type = [
   | `Normal
   | `Chat
   | `Groupchat
-  | `Headline
   | `Error
   ]
 
-  let make_message ?from ?to_ ?type_ ?id ?subject ?body ?subels ?lang () =
-    let a1 = match from with
-      | None -> []
-      | Some f -> ["from", f] in
-    let a2 = match to_ with
-      | None -> a1
-      | Some t -> ("to", t) :: a1 in
-    let a3 = match id with
-      | None -> a2
-      | Some i -> ("id", i) :: a2 in
-    let a4 = match type_ with
-      | None -> a3
-      | Some t -> ("type", match t with
-                     | `Normal -> "normal"
-                     | `Chat -> "chat"
-                     | `Groupchat -> "groupchat"
-                     | `Headline -> "headline"
-                     | `Error -> "error") :: a3 in
-    let a5 = match lang with
-      | None -> a4
-      | Some l -> ("lang", l) :: a4 in
-      
-    let s1 = match subject with
-      | None -> []
-      | Some s -> [make_simple_cdata "subject" s] in
-    let s2 = match body with
-      | None -> s1
-      | Some b -> make_simple_cdata "body" b :: s1 in
-    let s3 = match subels with
-      | None -> s2
-      | Some s -> s2 @ s in
-      make_element "message" a5 s3
-        
+  let string_of_message_type = function
+    | `Normal -> "normal"
+    | `Chat -> "chat"
+    | `Groupchat -> "groupchat"
+    | `Error -> "error"
+
+  let make_message ~ns ?jid_from ?jid_to ?type_ ?id ?subject ?body ?thread
+      ?(subels=[]) ?lang () =
+    let attrs =
+      List.fold_left (fun acc (k,v) ->
+                        if v <> "" then
+                          make_attr k v :: acc
+                        else
+                          acc
+                     )
+        (match lang with
+           | None -> []
+           | Some v -> [make_attr ~ns:ns_xml "lang" v])
+        ["to",  (match jid_to with | None -> "" | Some v -> v);
+         "from", (match jid_from with | None -> "" | Some v -> v);
+         "id", (match id with | None -> "" | Some v -> v);
+         "type", (match type_ with
+                    | None -> ""
+                    | Some v -> string_of_message_type v)]
+    in
+    let els =
+      List.fold_left (fun acc (k, v) ->
+                        match v with
+                          | None -> acc
+                          | Some v -> make_simple_cdata (ns, k) v :: acc
+                     ) subels
+        ["subject", subject;
+         "body", body;
+         "thread", thread]
+    in
+      make_element (ns, "message") attrs els
+
+  let make_error_reply condition ?text ?lang = function
+    | Xmlelement ((ns, name), attrs, els) ->
+        let error = StanzaError.make_error ~ns ?text ?lang condition in
+        let newattrs = make_attrs_reply ~type_:"error" attrs in
+          make_element (ns, name) newattrs (error::els)
+    | Xmlcdata _ -> raise MalformedStanza
 end
