@@ -1,1 +1,2 @@
 <*.ml>: -warn_error_A
+<test.*>: use_unix, use_cryptokit, use_mltls

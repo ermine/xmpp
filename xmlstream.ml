@@ -8,12 +8,6 @@ open Xml.Serialization
 
 exception XmlError of string
   
-type data =
-  | StreamStart of qname * attribute list
-  | StreamEnd
-  | Stanza of element
-  | Continue
-
 type t = {
   namespaces: (prefix, namespace) Hashtbl.t;
   stack_ns: (qname * (namespace * prefix) list) Stack.t;
@@ -22,7 +16,7 @@ type t = {
   ser: Serialization.t
 }
 
-let process_production p =
+let process_production p stream_start stanza stream_end =
   let add_child el =
     match Stack.pop p.stack with
       | Xmlelement (name, attrs, els) ->
@@ -53,12 +47,9 @@ let process_production p =
             let qname = parse_qname p.namespaces (split_name name) in
               Stack.push (qname, lnss) p.stack_ns;
               Stack.push (Xmlelement (qname, attrs, [])) p.stack;
-              if Stack.length p.stack = 1 then (
-                p.xparser <- xparser;
-                StreamStart (qname, attrs)
-              )
-              else
-                aux_production (Xmlparser.parse xparser)
+              if Stack.length p.stack = 1 then
+                stream_start qname attrs;
+              aux_production (Xmlparser.parse xparser)
       | EndElement name ->
           if not (Stack.is_empty p.stack) then
             let qname' = parse_qname p.namespaces (split_name name) in
@@ -70,10 +61,14 @@ let process_production p =
                        if qname = qname' then
                          if Stack.is_empty p.stack then (
                            p.xparser <- xparser;
-                           StreamEnd
+                           stream_end ()
                          ) else if Stack.length p.stack = 1 then (
                            p.xparser <- xparser;
-                           Stanza el
+                           match el with
+                             | Xmlelement (qname, attrs, els) ->
+                                 stanza qname attrs els
+                             | Xmlcdata _ ->
+                                 raise NonXmlelement
                          ) else (
                            add_child el;
                            aux_production (Xmlparser.parse xparser)
@@ -89,11 +84,11 @@ let process_production p =
             raise (XmlError "end tag")
       | EndOfBuffer ->
           p.xparser <- xparser;
-          Continue
+          ()
       | EndOfData ->
           if Stack.length p.stack < 2 then (
             p.xparser <- xparser;
-            StreamEnd
+            stream_end ()
           ) else
             raise End_of_file
   in
@@ -108,6 +103,12 @@ let create default_nss =
     ser = Xml.Serialization.create default_nss
   }
 
+let reset p =
+  Hashtbl.clear p.namespaces;
+  Stack.clear p.stack_ns;
+  Stack.clear p.stack;
+  p.xparser <- Xmlparser.create ~encoding:"UTF-8" ()
+
 let bind_prefix p prefix namespace =
   Xml.Serialization.bind_prefix p.ser prefix namespace
 
@@ -115,7 +116,7 @@ let add_buffer p buf =
   let newparser = Xmlparser.add_buffer p.xparser buf in
     p.xparser <- newparser
 
-let parse p = process_production p
+let parse = process_production
 
 let stanza_serialize p el =
   let buf = Buffer.create 30 in
@@ -129,11 +130,11 @@ let stream_header p qname attrs =
     out "<?xml version='1.0'?>";
     out "<";
     out (string_of_qname p.ser qname);
-    if attrs <> [] then (
-      out " ";
-      out (string_of_list (string_of_attr p.ser) " " attrs)
-    );
-    let lnss = local_namespaces p.ser qname attrs p.ser.default_nss in
+    let lnss = local_namespaces p.ser.default_nss p.ser qname attrs in
+      if attrs <> [] then (
+        out " ";
+        out (string_of_list (string_of_attr p.ser) " " attrs)
+      );
       if lnss <> [] then (
         out " ";
         out (string_of_list (string_of_ns p.ser) " " p.ser.default_nss)

@@ -1,12 +1,15 @@
 Uni_data
 Uni_norm
 Stringprep
-xMPP_types
 StreamError
 StanzaError
 Sasl
-XMPP_generic
 XMPP
 Jid
-Jeps
+Xep_last
+Xep_muc
+Xep_stats
+Xep_time
+Xep_vcard
+Xep_version
 

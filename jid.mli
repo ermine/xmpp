@@ -1,9 +1,8 @@
 (*
- * (c) 2004, 2005, 2006, 2007 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
+ * (c) 2004-2009 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
  *)
 
 type jid = {
-  string : string;
   node : string;
   lnode : string;
   domain : string;
@@ -22,3 +21,4 @@ val is_node : jid -> bool
 val is_bare_node : jid -> bool
 val is_domain : jid -> bool
 val equal : jid -> jid -> bool
+val make_jid: string -> string -> string -> jid

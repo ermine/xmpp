@@ -1,11 +1,10 @@
 (*
- * (c) 2004-2008 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
+ * (c) 2004-2009 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
  *)
 
 exception InvalidJID
  
 type jid = {
-  string: string;
   node: string;
   lnode: string;
   domain: string;
@@ -34,7 +33,6 @@ let jid_of_string str =
 	      "", bare_jid
   in
     {
-	    string = str;
 	    node = node;
 	    domain = domain;
 	    resource = resource;
@@ -69,4 +67,14 @@ let equal jid1 jid2 =
   jid1.lnode = jid2.lnode &&
   jid1.ldomain = jid2.ldomain &&
   jid1.lresource = jid2.lresource
+  
+let make_jid node domain resource =
+  {
+    node = node;
+    lnode = Stringprep.nodeprep node;
+    domain = domain;
+    ldomain = Stringprep.nameprep domain;
+    resource = resource;
+    lresource = Stringprep.resourceprep resource
+  }
   
