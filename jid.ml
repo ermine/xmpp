@@ -44,6 +44,9 @@ let jid_of_string str =
 let bare_jid jid = 
   { jid with resource = ""; lresource = "" }
     
+let domain jid =
+  { jid with lnode = ""; node = ""; resource = ""; lresource = ""}
+
 let string_of_jid ?(lowercase=true) jid =
   let node, domain, resource =
     match lowercase with
@@ -78,3 +81,5 @@ let make_jid node domain resource =
     lresource = Stringprep.resourceprep resource
   }
   
+let replace_resource jid resource =
+  {jid with resource = resource; lresource = Stringprep.resourceprep resource}

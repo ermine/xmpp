@@ -1,2 +1,2 @@
-<*.ml>: -warn_error_A
+<*.ml>: -warn_error_A, use_xml, use_mltls, use_treap
 <test.*>: use_unix, use_cryptokit, use_mltls

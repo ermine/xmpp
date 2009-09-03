@@ -3,6 +3,8 @@ Uni_norm
 Stringprep
 StreamError
 StanzaError
+Transport
+Xmlstream
 Sasl
 XMPP
 Jid
@@ -12,4 +14,4 @@ Xep_stats
 Xep_time
 Xep_vcard
 Xep_version
-
+Xep_xdata

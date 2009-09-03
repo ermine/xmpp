@@ -56,33 +56,37 @@ type iq =
   | IQRequest of iq_request
   | IQResponse of iq_response
 
-type t = {
-  socket: Transport.t;
-  mutable id: int;
-  mutable iq_response:
+type 'a t = {
+  socket : Transport.t;
+  mutable sid : int;
+  xmllang : string;
+  mutable iq_response :
     (iq_response -> string option -> string option -> string option -> unit ->
        unit) IDCallback.t;
-  mutable iq_request: (iq_request -> string option -> string option ->
-                         string option -> unit ->
-                           iq_response) IQRequestCallback.t;
-  mutable stanza_handlers: (t -> Xml.qname -> Xml.attribute list ->
-                              Xml.element list -> unit) StanzaHandler.t;
-  mutable myjid: jid;
-  p: Xmlstream.t
+  mutable iq_request : (iq_request -> string option -> string option ->
+                          string option -> unit ->
+                            iq_response) IQRequestCallback.t;
+  mutable stanza_handlers : ('a t -> Xml.qname -> Xml.attribute list ->
+                               Xml.element list -> unit) StanzaHandler.t;
+  mutable myjid : jid;
+  p : Xmlstream.t;
+  data : 'a
 }
 
+let string_of_option opt = match opt with None -> "" | Some v -> v
+let maybe f = function None -> None | Some v -> Some (f v)
+
 let make_stanza_attrs ?id ?jid_from ?jid_to ?kind ?lang () =
-  let maybe opt = match opt with None -> "" | Some v -> v in
     List.fold_left
       (fun acc (k, v) ->
          if v = "" then acc else make_attr k v :: acc
       ) (match lang with
            | None -> []
            | Some v -> [make_attr ~ns:ns_xml "lang" v])
-      ["id", (maybe id);
-       "to", (maybe jid_to);
-       "from", (maybe jid_from);
-       "type", (maybe kind)]
+      ["id", (string_of_option id);
+       "to", (string_of_option jid_to);
+       "from", (string_of_option jid_from);
+       "type", (string_of_option kind)]
 
 let make_stanza_attrs_reply ?lang ?kind attrs =
   let jid_to = safe_get_attr_value "to" attrs
@@ -125,26 +129,54 @@ let parse_stanza_attrs attrs =
                  ) (None, None, None, None, None) attrs
       
 let make_iq_request t ?jid_from ?jid_to ?lang request callback =
-  t.id <- t.id + 1;
-  let id = string_of_int t.id ^ ":" ^ string_of_int (Random.int 1000) in
+  t.sid <- t.sid + 1;
+  let id = string_of_int t.sid ^ ":" ^ string_of_int (Random.int 1000) in
   let kind, el =
     match request with
       | IQSet el -> "set", el
       | IQGet el -> "get", el
   in
+  let jid_to = maybe string_of_jid jid_to in
+  let jid_from = maybe string_of_jid jid_from in
   let attrs = make_stanza_attrs ~id ~kind ?jid_from ?jid_to ?lang () in
     t.iq_response <- IDCallback.add t.iq_response id callback 1;
     t.socket.send (Xmlstream.stanza_serialize t.p
                      (make_element (ns_client, "iq") attrs [el]))
       
+type ('a, 'b) stanza = {
+  id : id option;
+  jid_from : Jid.jid option;
+  jid_to : string option;
+  kind : 'a option;
+  lang : string option;
+  content : 'b;
+  x : element list
+    
+}
+
+type message_content = {
+  body : string option;
+  subject : string option;
+  thread : string option
+}
+
 type message_type =
-  | MsgNormal
-  | MsgChat
-  | MsgGroupchat
-  | MsgHeadline
+  | Normal
+  | Chat
+  | Groupchat
+  | Headline
+
+let string_of_message_type = function
+  | Normal -> "normal"
+  | Chat -> "chat"
+  | Groupchat -> "groupchat"
+  | Headline -> "headline"
+    
+type message_attrs = (message_type, message_content) stanza
 
 let parse_message ~callback ~callback_error t _qname attrs els =
   let id, jid_from, jid_to, kind, lang = parse_stanza_attrs attrs in
+  let jid_from = maybe jid_of_string jid_from in
     if kind = Some "error" then
       let err = StanzaError.parse_error
         (get_element (ns_client, "error") els) in
@@ -154,11 +186,11 @@ let parse_message ~callback ~callback_error t _qname attrs els =
         match kind with
           | Some v -> (
               match v with
-                | "normal" -> Some MsgNormal
-                | "chat" -> Some MsgChat
-                | "groupchat" -> Some MsgGroupchat
-                | "headline" -> Some MsgHeadline
-                | _ -> Some MsgNormal
+                | "normal" -> Some Normal
+                | "chat" -> Some Chat
+                | "groupchat" -> Some Groupchat
+                | "headline" -> Some Headline
+                | _ -> Some Normal
             )
           | None -> None
       in
@@ -180,18 +212,26 @@ let parse_message ~callback ~callback_error t _qname attrs els =
                               (x, body, subject, thread)
                        ) ([], None, None, None) els
       in
-        callback t ?id ?jid_from ?jid_to ?kind ?lang ?body ?subject ?thread x ()
+      let message_stanza = {
+        id = id;
+        jid_from = jid_from;
+        jid_to = jid_to;
+        kind = kind;
+        lang = lang;
+        content = {body = body;
+                   subject = subject;
+                   thread = thread
+                  };
+        x = x
+      }
+      in
+        callback t message_stanza
       
 let send_message t ?id ?jid_from ?jid_to ?kind ?lang
     ?body ?subject ?thread ?(x=[]) () =
-  let kind =
-    match kind with
-      | None -> None
-      | Some MsgNormal -> Some "normal"
-      | Some MsgChat -> Some "chat"
-      | Some MsgGroupchat -> Some "groupchat"
-      | Some MsgHeadline -> Some "headline"
-  in
+  let jid_to = maybe string_of_jid jid_to in
+  let jid_from = maybe string_of_jid jid_from in
+  let kind = maybe string_of_message_type kind in
   let attrs = make_stanza_attrs ?id ?jid_from ?jid_to ?kind?lang () in
   let els = List.fold_left (fun acc (k, v) ->
                               match v with
@@ -205,21 +245,44 @@ let send_message t ?id ?jid_from ?jid_to ?kind ?lang
                      (make_element (ns_client, "message") attrs els))
     
 type presence_type =
-  | PrsProbe
-  | PrsSubscribe
-  | PrsSubscribed
-  | PrsUnsubscribe
-  | PrsUnsubscribed
-  | PrsUnavailable
+  | Probe
+  | Subscribe
+  | Subscribed
+  | Unsubscribe
+  | Unsubscribed
+  | Unavailable
 
-type presence_show_t =
-  | PrsChat
-  | PrsAway
-  | PrsDND
-  | PrsXA
+let string_of_presence_type = function
+  | Probe -> "probe"
+  | Subscribe -> "subscribe"
+  | Subscribed -> "subscribed"
+  | Unsubscribe -> "unsubscribe"
+  | Unsubscribed -> "unsubscribed"
+  | Unavailable -> "unavailable"
+
+type presence_show =
+  | ShowChat
+  | ShowAway
+  | ShowDND
+  | ShowXA
+
+let string_of_show = function
+  | ShowChat -> "chat"
+  | ShowAway -> "away"
+  | ShowDND -> "dnd"
+  | ShowXA -> "xa"
       
+type presence_content = {
+  show : presence_show option;
+  status : string option;
+  priority : int option
+}
+
+type presence_attrs = (presence_type, presence_content) stanza
+
 let parse_presence ~callback ~callback_error t _qname attrs els =
   let id, jid_from, jid_to, kind, lang = parse_stanza_attrs attrs in
+  let jid_from = maybe jid_of_string jid_from in
     if kind = Some "error" then
       let err = StanzaError.parse_error
         (get_element (ns_client, "error") els) in
@@ -230,12 +293,12 @@ let parse_presence ~callback ~callback_error t _qname attrs els =
           | None -> None
           | Some v ->
               match v with
-                | "probe" -> Some PrsProbe
-                | "subscribe" -> Some PrsSubscribe
-                | "subscribed" -> Some PrsSubscribed
-                | "unsubscribe" -> Some PrsUnsubscribe
-                | "unsubscribed" -> Some PrsUnsubscribed
-                | "unavailable" -> Some PrsUnavailable
+                | "probe" -> Some Probe
+                | "subscribe" -> Some Subscribe
+                | "subscribed" -> Some Subscribed
+                | "unsubscribe" -> Some Unsubscribe
+                | "unsubscribed" -> Some Unsubscribed
+                | "unavailable" -> Some Unavailable
                 | _ -> None
       in
       let x, show, status, priority =
@@ -263,27 +326,32 @@ let parse_presence ~callback ~callback_error t _qname attrs els =
           | None -> None
           | Some v ->
               match v with
-                | "chat" -> Some PrsChat
-                | "dnd" -> Some PrsDND
-                | "away" -> Some PrsAway
-                | "xa" -> Some PrsXA
+                | "chat" -> Some ShowChat
+                | "dnd" -> Some ShowDND
+                | "away" -> Some ShowAway
+                | "xa" -> Some ShowXA
                 | _ -> None
       in
-        callback t ?id ?jid_from ?jid_to ?kind ?lang
-          ?show ?status ?priority x ()
+      let presence_stanza = {
+        id = id;
+        jid_from = jid_from;
+        jid_to = jid_to;
+        kind = kind;
+        lang = lang;
+        content = {show = show;
+                   status = status;
+                   priority = priority
+                  };
+        x = x
+      }
+      in
+        callback t presence_stanza
       
 let send_presence t ?id ?jid_from ?jid_to ?kind ?lang
     ?show ?status ?priority ?(x=[]) () =
-  let kind =
-    match kind with
-      | None -> None
-      | Some PrsProbe -> Some "probe"
-      | Some PrsSubscribe -> Some "subscribe"
-      | Some PrsSubscribed -> Some "subscribed"
-      | Some PrsUnsubscribe -> Some "unsubscribe"
-      | Some PrsUnsubscribed -> Some "unsubscribed"
-      | Some PrsUnavailable -> Some "unavailable"
-  in
+  let jid_to = maybe string_of_jid jid_to in
+  let jid_from = maybe string_of_jid jid_from in
+  let kind = maybe string_of_presence_type kind in
   let attrs = make_stanza_attrs ?id ?jid_from ?jid_to ?kind ?lang () in
   let els =
     List.fold_left (fun acc (k,v) ->
@@ -291,18 +359,9 @@ let send_presence t ?id ?jid_from ?jid_to ?kind ?lang
                         | None -> acc
                         | Some v -> make_simple_cdata (ns_client, k) v :: acc
                    ) x
-      ["show", (match show with
-                  | None -> None
-                  | Some v ->
-                      match v with
-                        | PrsChat -> Some "chat"
-                        | PrsAway -> Some "away"
-                        | PrsDND -> Some "dnd"
-                        | PrsXA -> Some "xa");
+      ["show", (maybe string_of_show show);
        "status", status;
-       "priority", (match priority with
-                      | None -> None
-                      | Some i -> Some (string_of_int i))] in
+       "priority", (maybe string_of_int priority)] in
     t.socket.send (Xmlstream.stanza_serialize t.p
                      (make_element (ns_client, "presence") attrs els))
       
@@ -389,7 +448,7 @@ let process_iq t _qname attrs els =
         )
           
 let make_session t session =
-  make_iq_request t ~jid_from:(string_of_jid t.myjid)
+  make_iq_request t ~jid_from:t.myjid
     (IQSet (make_element (ns_xmpp_session, "session") [] []))
     (fun ev _jid_from _jid_to _lang () ->
        match ev with
@@ -398,7 +457,7 @@ let make_session t session =
 
 
 let make_bind t session =
-  make_iq_request t ~jid_to:t.myjid.domain
+  make_iq_request t ~jid_to:(domain t.myjid)
     (IQSet (make_element (ns_xmpp_bind, "bind") []
               [make_simple_cdata (ns_xmpp_bind, "resource") t.myjid.resource]))
     (fun ev _jid_from _jid_to _lang () ->
@@ -505,32 +564,35 @@ let sasl_auth t features password  session =
     else
       raise (AuthError "no known SASL method")
         
-let create socket myjid =
+let create data socket ?(lang="") myjid =
   let p = Xmlstream.create [ns_streams; ns_client] in
   let () = Xmlstream.bind_prefix p "stream" ns_streams in
     {
       socket = socket;
-      id = 1;
+      sid = 1;
+      xmllang = lang;
       iq_response = IDCallback.empty;
       iq_request = IQRequestCallback.empty;
       stanza_handlers = StanzaHandler.empty;
       myjid = myjid;
       p = p;
+      data = data
     }
 
 let starttls t sasl_step =
-  print_endline "starttls";
   let nextstep t =
     Xmlstream.reset t.p;
     register_stanza_handler t (ns_streams, "features") sasl_step;
     t.socket.send (Xmlstream.stream_header t.p (ns_streams, "stream")
-                     [make_attr "to" t.myjid.domain; make_attr "version" "1.0"])
+                     ((make_attr "to" t.myjid.domain) ::
+                        (make_attr "version" "1.0") ::
+                        (if t.xmllang = "" then [] else
+                           [make_attr ~ns:ns_xml "lang" t.xmllang])))
   in
     register_stanza_handler t (ns_xmpp_tls, "")
       (fun t qname _attrs els ->
          unregister_stanza_handler t (ns_xmpp_tls, "");
          if qname = (ns_xmpp_tls, "proceed") then (
-           print_endline "switching";
            Transport.switch t.socket;
            nextstep t
          )
@@ -569,7 +631,10 @@ let open_stream t ?(use_tls=false) password session =
              sasl_auth t els password session
       );
     t.socket.send (stream_header t.p (ns_streams, "stream")
-                   [make_attr "to" t.myjid.domain; make_attr "version" "1.0"])
+                     ((make_attr "to" t.myjid.domain) ::
+                        (make_attr "version" "1.0") ::
+                        (if t.xmllang = "" then [] else
+                           [make_attr ~ns:ns_xml "lang" t.xmllang])))
     
 
 let stanza t qname attrs els =

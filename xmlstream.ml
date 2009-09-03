@@ -66,7 +66,8 @@ let process_production p stream_start stanza stream_end =
                            p.xparser <- xparser;
                            match el with
                              | Xmlelement (qname, attrs, els) ->
-                                 stanza qname attrs els
+                                 stanza qname attrs els;
+                                 aux_production (Xmlparser.parse xparser)
                              | Xmlcdata _ ->
                                  raise NonXmlelement
                          ) else (
