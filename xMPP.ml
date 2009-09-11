@@ -635,7 +635,9 @@ let open_stream t ?(use_tls=false) password session =
                         (make_attr "version" "1.0") ::
                         (if t.xmllang = "" then [] else
                            [make_attr ~ns:ns_xml "lang" t.xmllang])))
-    
+      
+let close_stream t =
+  t.socket.send (Xmlstream.stream_end t.p (ns_streams, "stream"))
 
 let stanza t qname attrs els =
   if qname = (ns_streams, "error") then

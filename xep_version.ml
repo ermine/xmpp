@@ -1,5 +1,8 @@
 (*
  * (c) 2004-2009 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
+ *
+ * XEP-0092: Software Version
+ * Version: 1.1
  *)
 
 open Xml
