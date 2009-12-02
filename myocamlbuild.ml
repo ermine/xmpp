@@ -6,6 +6,7 @@ let _ =  dispatch begin function
       extern "xml";
       extern "mltls";
       extern "treap";
+      extern "cryptokit";
       
       install_lib "xmpp" ~cma:"xMPP" []
         
