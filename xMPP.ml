@@ -143,21 +143,13 @@ let make_iq_request t ?jid_from ?jid_to ?lang request callback =
     t.socket.send (Xmlstream.stanza_serialize t.p
                      (make_element (ns_client, "iq") attrs [el]))
       
-type ('a, 'b) stanza = {
+type 'a stanza = {
   id : id option;
   jid_from : Jid.jid option;
   jid_to : string option;
-  kind : 'a option;
   lang : string option;
-  content : 'b;
+  content : 'a;
   x : element list
-    
-}
-
-type message_content = {
-  body : string option;
-  subject : string option;
-  thread : string option
 }
 
 type message_type =
@@ -166,13 +158,20 @@ type message_type =
   | Groupchat
   | Headline
 
+type message_content = {
+  message_type : message_type option;
+  body : string option;
+  subject : string option;
+  thread : string option
+}
+
 let string_of_message_type = function
   | Normal -> "normal"
   | Chat -> "chat"
   | Groupchat -> "groupchat"
   | Headline -> "headline"
     
-type message_attrs = (message_type, message_content) stanza
+type message_stanza = message_content stanza
 
 let parse_message ~callback ~callback_error t _qname attrs els =
   let id, jid_from, jid_to, kind, lang = parse_stanza_attrs attrs in
@@ -216,11 +215,11 @@ let parse_message ~callback ~callback_error t _qname attrs els =
         id = id;
         jid_from = jid_from;
         jid_to = jid_to;
-        kind = kind;
         lang = lang;
-        content = {body = body;
-                   subject = subject;
-                   thread = thread
+        content = { message_type = kind;
+                    body = body;
+                    subject = subject;
+                    thread = thread
                   };
         x = x
       }
@@ -273,12 +272,13 @@ let string_of_show = function
   | ShowXA -> "xa"
       
 type presence_content = {
+  presence_type : presence_type option;
   show : presence_show option;
   status : string option;
   priority : int option
 }
 
-type presence_attrs = (presence_type, presence_content) stanza
+type presence_stanza = presence_content stanza
 
 let parse_presence ~callback ~callback_error t _qname attrs els =
   let id, jid_from, jid_to, kind, lang = parse_stanza_attrs attrs in
@@ -336,11 +336,11 @@ let parse_presence ~callback ~callback_error t _qname attrs els =
         id = id;
         jid_from = jid_from;
         jid_to = jid_to;
-        kind = kind;
         lang = lang;
-        content = {show = show;
-                   status = status;
-                   priority = priority
+        content = { presence_type = kind;
+                    show = show;
+                    status = status;
+                    priority = priority
                   };
         x = x
       }
