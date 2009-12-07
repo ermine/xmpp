@@ -7,7 +7,7 @@
 
 open Xml
 open XMPP
-open Jid
+open JID
 
 let ns_muc = Some "http://jabber.org/protocol/muc"
 let ns_muc_user = Some "http://jabber.org/protocol/muc#user"
@@ -119,9 +119,9 @@ struct
   }
     
   type  data = {
-    decline : (Jid.jid option * Jid.jid option * string option) option;
-    destroy : (Jid.jid option * string option) option;
-    invite : (Jid.jid option * Jid.jid option * string option) list;
+    decline : (JID.jid option * JID.jid option * string option) option;
+    destroy : (JID.jid option * string option) option;
+    invite : (JID.jid option * JID.jid option * string option) list;
     item : item option;
     password : string option;
     status : int list
@@ -484,8 +484,8 @@ struct
     make_element (ns_muc_owner, "query") [] [xdata]
     
   let decode_xdata el =
-    let x = get_subelement (Xep_xdata.ns_xdata, "x") el in
-      Xep_xdata.decode x
+    let x = get_subelement (XEP_xdata.ns_xdata, "x") el in
+      XEP_xdata.decode x
 end
 
 module Unique =

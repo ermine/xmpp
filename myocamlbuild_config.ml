@@ -138,13 +138,22 @@ let install_lib name ?cma modules =
          let mllib =
            let mllib = cma -.- "mllib" in
              if Pathname.exists mllib then
-               let l =
-                 List.map String.uncapitalize (string_list_of_file mllib) in
+               let l = string_list_of_file mllib in
+               let add_cmi file acc =
+                 if Pathname.exists (file -.- "mli") then
+                   A (file -.- "mli") :: A (file -.- "cmi") :: acc
+                 else
+                   A (file -.- "cmi") :: acc
+               in
                  List.fold_left (fun acc f ->
-                                   if Pathname.exists (f -.- "mli") then
-                                     A (f -.- "mli") :: A (f -.- "cmi") :: acc
+                                   if Pathname.exists (f -.- "cmi") then
+                                     add_cmi f acc
                                    else
-                                     A (f -.- "cmi") :: acc
+                                     let f = String.uncapitalize f in
+                                       if Pathname.exists (f -.- "cmi") then
+                                         add_cmi f acc
+                                       else
+                                         acc
                                 ) [A (cma -.- "a")] l
              else if Pathname.exists (cma -.- "mli") then
                [A (cma -.- "mli") ; A (cma -.- "cmi")]

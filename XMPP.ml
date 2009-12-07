@@ -5,7 +5,7 @@
 open Xml
 open Xmlstream
 open StanzaError
-open Jid
+open JID
 open Transport  
 
 exception Error of string
@@ -145,7 +145,7 @@ let make_iq_request t ?jid_from ?jid_to ?lang request callback =
       
 type 'a stanza = {
   id : id option;
-  jid_from : Jid.jid option;
+  jid_from : JID.jid option;
   jid_to : string option;
   lang : string option;
   content : 'a;

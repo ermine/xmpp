@@ -8,7 +8,7 @@ let _ =  dispatch begin function
       extern "treap";
       extern "cryptokit";
       
-      install_lib "xmpp" ~cma:"xMPP" []
+      install_lib "xmpp" ~cma:"XMPP" []
         
   | _ ->
       ()
