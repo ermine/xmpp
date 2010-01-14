@@ -1,2 +1,4 @@
+true: debug
 <*.ml>: -warn_error_A, use_xml, use_mltls, use_treap, use_cryptokit
-<test.*>: use_unix, pkg_cryptokit, pkg_mltls
+<sasl.ml>: camlp4o, use_base64
+<test.*>: use_xml, use_treap, use_xmpp, use_unix, use_cryptokit, use_mltls, use_base64

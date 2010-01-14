@@ -1,5 +1,5 @@
 (*
- * (c) 2004-2009 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
+ * (c) 2004-2010 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
  *)
 
 open Unix
@@ -54,15 +54,14 @@ type machine = {
 }
 
 let new_machine fd certificate =
+  tls_init ();
   let ctx = tls_SSL_CTX_new SSLv23_method in
   let () =
-    let n = tls_SSL_CTX_use_certificate_file ctx 
-      certificate SSL_FILETYPE_PEM in
+    let n = tls_SSL_CTX_use_certificate_file ctx certificate SSL_FILETYPE_PEM in
       assert (n = 1)
   in
   let () =
-    let n = tls_SSL_CTX_use_PrivateKey_file ctx 
-      certificate SSL_FILETYPE_PEM in
+    let n = tls_SSL_CTX_use_PrivateKey_file ctx certificate SSL_FILETYPE_PEM in
       assert (n = 1)
   in
   let () =
@@ -73,25 +72,28 @@ let new_machine fd certificate =
     let n = tls_SSL_CTX_set_default_verify_paths ctx in
       assert (n = 1)
   in
+(* It crashes in set_verify: sk_free ()
   let () =
     let verify_callback (preverify_ok:int) 
         (x509_store_ctx:tls_X509_STORE_CTX) =
-      Printf.printf "VERIFY CALLBACK\n";
+      print_endline "VERIFY CALLBACK\n";
       flush Pervasives.stdout;
       1
     in
-      tls_SSL_CTX_set_verify ctx
-        [SSL_VERIFY_PEER; SSL_VERIFY_CLIENT_ONCE]
+      tls_SSL_CTX_set_verify ctx [SSL_VERIFY_PEER; SSL_VERIFY_CLIENT_ONCE]
         verify_callback
   in
+*)   
   let ssl = tls_SSL_new ctx in
   let n = tls_SSL_set_fd ssl fd in
   let () =
     if n <> 1 then
       let err = tls_SSL_get_error ssl n in
         Printf.eprintf "SSL_set_fd error code %s\n" (string_of_ssl_error err);
+        flush Pervasives.stdout;
         assert (n = 1) in
   let () = tls_SSL_set_connect_state ssl in
+  (* let _ = tls_SSL_do_handshake ssl in *)
     { ctx = ctx;
       ssl = ssl; }
       
@@ -100,14 +102,18 @@ let rec tls_read machine () =
   let n = tls_SSL_read machine.ssl buf 0 9216 in
     if n <= 0 then
       let err = tls_SSL_get_error machine.ssl n in
-        if err = SSL_ERROR_WANT_READ || err = SSL_ERROR_WANT_WRITE then
+        if err = SSL_ERROR_WANT_READ then
           (* continue negotation *)
+          tls_read machine ()
+        else if err = SSL_ERROR_WANT_WRITE then
+          (* TODO: return w/o results *)
           tls_read machine ()
         else (
           let rcvd, _ = tls_SSL_get_shutdown machine.ssl in
             if rcvd then (
               (* normal shutdown *)
-              Printf.printf "normal shutdown\n";
+              Printf.printf "TLS: normal shutdown\n";
+              flush Pervasives.stdout;
               ""
             ) else (* if err = SSL_ERROR_SYSCALL then *) (
               (* broken connection *)
@@ -117,11 +123,15 @@ let rec tls_read machine () =
               ""
             )
         )
-    else
-      String.sub buf 0 n
+    else (* if n > 0 then *)
+      let s = String.sub buf 0 n in
+        Printf.printf "TLS IN: %s\n" s;
+        flush Pervasives.stdout;
+        s
         
 let tls_send machine buf =
-  Printf.printf "OUT: %s\n" buf;
+  Printf.printf "TLS OUT: %s\n" buf;
+  flush Pervasives.stdout;
   let rec aux_send off =
     let n = tls_SSL_write machine.ssl buf off (String.length buf - off) in
       if n <= 0 then
@@ -143,7 +153,9 @@ let tls_send machine buf =
     aux_send 0
            
 let switch socket =
-  let tls = new_machine socket.fd "cert.pem" in
+  let certfile = "cert.pem" in
+  if not (Sys.file_exists certfile) then
+    failwith "Certificate not found";
+  let tls = new_machine socket.fd certfile in
     socket.send <- tls_send tls;
     socket.read <- tls_read tls
-      

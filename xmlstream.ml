@@ -34,7 +34,7 @@ let process_production p stream_start stanza stream_end =
           if Stack.length p.stack > 1 then
             add_child (Xmlcdata text)
           else
-            raise (XmlError "text between stanzas");
+            raise (XmlError ("text between stanzas '" ^ text ^ "'"));
           aux_production (Xmlparser.parse xparser)
       | Pi _
       | Doctype _
