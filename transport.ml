@@ -53,49 +53,23 @@ type machine = {
   ssl: tls_SSL
 }
 
-let new_machine fd certificate =
+let new_machine fd =
   tls_init ();
   let ctx = tls_SSL_CTX_new SSLv23_method in
-  let () =
-    let n = tls_SSL_CTX_use_certificate_file ctx certificate SSL_FILETYPE_PEM in
-      assert (n = 1)
-  in
-  let () =
-    let n = tls_SSL_CTX_use_PrivateKey_file ctx certificate SSL_FILETYPE_PEM in
-      assert (n = 1)
-  in
-  let () =
-    let n = tls_SSL_CTX_check_private_key ctx in
-      assert (n = 1)
-  in
-  let () =
-    let n = tls_SSL_CTX_set_default_verify_paths ctx in
-      assert (n = 1)
-  in
-(* It crashes in set_verify: sk_free ()
-  let () =
-    let verify_callback (preverify_ok:int) 
-        (x509_store_ctx:tls_X509_STORE_CTX) =
-      print_endline "VERIFY CALLBACK\n";
-      flush Pervasives.stdout;
-      1
-    in
-      tls_SSL_CTX_set_verify ctx [SSL_VERIFY_PEER; SSL_VERIFY_CLIENT_ONCE]
-        verify_callback
-  in
-*)   
   let ssl = tls_SSL_new ctx in
   let n = tls_SSL_set_fd ssl fd in
   let () =
     if n <> 1 then
       let err = tls_SSL_get_error ssl n in
-        Printf.eprintf "SSL_set_fd error code %s\n" (string_of_ssl_error err);
+        Printf.eprintf "SSL_set_fd error code %s\n"
+          (string_of_ssl_error err);
         flush Pervasives.stdout;
-        assert (n = 1) in
+        assert (n <> 1)
+  in      
   let () = tls_SSL_set_connect_state ssl in
-  (* let _ = tls_SSL_do_handshake ssl in *)
     { ctx = ctx;
-      ssl = ssl; }
+      ssl = ssl
+    }
       
 let rec tls_read machine () =
   let buf = String.create 9216 in
@@ -153,9 +127,6 @@ let tls_send machine buf =
     aux_send 0
            
 let switch socket =
-  let certfile = "cert.pem" in
-  if not (Sys.file_exists certfile) then
-    failwith "Certificate not found";
-  let tls = new_machine socket.fd certfile in
+  let tls = new_machine socket.fd in
     socket.send <- tls_send tls;
     socket.read <- tls_read tls

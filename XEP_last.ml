@@ -1,5 +1,5 @@
 (*
- * (c) 2004-2009 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
+ * (c) 2004-2010 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
  *
  * XEP-0012: Last Activity
  * Version: 2.0

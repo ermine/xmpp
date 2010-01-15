@@ -2,16 +2,34 @@ open Ocamlbuild_plugin
 open Ocamlbuild_pack.Ocamlbuild_where
 open Command
 
+(*
+ * myocamlbuild.config example:
+ * # comment
+ * install_dir=../../site-lib
+ * bytecode=true
+ * nativecode=false
+ * xml=../../site-lib/xml
+ *)
 let config =
-  let split line =
-    let sp = String.index line '=' in
-      ((String.sub line 0 sp),
-       (String.sub line (sp+1) (String.length line - sp - 1)))
-  in
-    if Pathname.exists "myocamlbuild.config" then
-      List.map split (string_list_of_file "myocamlbuild.config")
-    else
-      []
+  if not (Pathname.exists "myocamlbuild.config") then
+    []
+  else
+    List.fold_left (fun acc line ->
+                      if line.[0] = '#' then
+                        acc
+                      else
+                        let sp = String.index line '=' in
+                        let pair = ((String.sub line 0 sp),
+                                    (String.sub line (sp+1)
+                                       (String.length line - sp - 1))) in
+                          pair :: acc
+                   ) [] (string_list_of_file "myocamlbuild.config")
+
+let get_install_dir () =
+  try List.assoc "install_dir" config
+  with Not_found ->
+    Printf.printf "Please specify install_dir parameter in myocamlbuild.config";
+    exit 1
 
 let ocamlfind_query pkg =
   let cmd = Printf.sprintf
@@ -113,9 +131,10 @@ let make_binding ?include_dir ?lib_dir ~lib ?headers name =
     | Some h ->
         dep  ["compile"; "c"] h
   
-let install_dir = "../../site-lib"
-let bytecode = true
-let nativecode = true
+let bytecode =
+  try bool_of_string (List.assoc "bytecode" config) with Not_found -> true
+let nativecode =
+  try bool_of_string (List.assoc "nativecode" config) with Not_found -> true
 
 let make_deps name =
   if bytecode then
@@ -130,10 +149,11 @@ let install_lib name ?cma modules =
       | Some v -> v
   in
   let deps = make_deps cma in
-    rule "Install"
+    rule "Install Library"
       ~prod:"install"
       ~deps
       (fun env _build ->
+         let install_dir = get_install_dir () in
          let deps = List.map (fun file -> A file) deps in
          let mllib =
            let mllib = cma -.- "mllib" in
