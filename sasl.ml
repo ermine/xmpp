@@ -145,9 +145,9 @@ let parse_digest_md5_challenge str =
         (qop, nonce)
     with Not_found ->
       raise (Error "Malformed SASL challenge")
-  
+
 let sasl_digest_response chl username server passwd =
-  let str = Base64.decode chl in
+  let str = MyBase64.decode chl in
   let () =
     print_endline str;
     flush stdout in
@@ -166,12 +166,12 @@ let sasl_digest_response chl username server passwd =
       in
         print_endline resp;
         flush stdout;
-        Base64.encode resp
+        MyBase64.encode resp
     else
       raise (Error "No known qop methods")
 
 let sasl_digest_rspauth chl =
-  let str = Base64.decode chl in
+  let str = MyBase64.decode chl in
   let pairs = get_pairs str in
   let _rspauth = List.assoc "rspauth" pairs in
     ()

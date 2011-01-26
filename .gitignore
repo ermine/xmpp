@@ -1,0 +1,6 @@
+setup.log
+setup.data
+*.byte
+*.native
+*.docdir
+_build

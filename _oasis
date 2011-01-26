@@ -1,0 +1,43 @@
+OASISFormat: 0.2
+Name:        xmpp
+Version:     0.1
+Authors:     Anastasia Gornostaeva
+Copyrights:  (C) 2004 Anastasia Gornostaeva
+License:     BSD3
+LicenseFile: LICENCE
+Plugins:     DevFiles (0.2), META (0.2)
+BuildTools:  ocamlbuild
+
+Synopsis:    XMPP protocol implementation
+Description:
+  TODO
+
+Library xmpp
+  Path:       .
+  Modules:    Uni_data, Uni_norm, Stringprep, StreamError, StanzaError, 
+              Transport, Xmlstream, MyBase64, Sasl, XMPP, JID, XEP_last, 
+              XEP_muc, XEP_stats, XEP_time, XEP_vcard, XEP_version, 
+              XEP_xdata
+  BuildDepends: xml, treap, cryptokit, mltls
+
+Executable test
+  Path: .
+  Install: false
+  Custom: true
+  CompiledObject: best
+  MainIs: test.ml
+  BuildDepends: xmpp
+
+Document api
+  Title:      API reference
+  InstallDir: $docdir
+  Type: ocamlbuild (0.2)
+  BuildTools: ocamldoc
+  XOcamlbuildPath: .
+  XOcamlbuildLibraries: xmpp
+
+SourceRepository github
+  Type:     git
+  Location: git://github.com/ermine/xmpp.git
+  Browser:  https://github.com/ermine/xmpp
+

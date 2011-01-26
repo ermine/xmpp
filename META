@@ -1,0 +1,10 @@
+# OASIS_START
+# DO NOT EDIT (digest: 92e180891177cfca9363d388d0890e81)
+version = "0.1"
+description = "XMPP protocol implementation"
+requires = "xml treap cryptokit mltls"
+archive(byte) = "xmpp.cma"
+archive(native) = "xmpp.cmxa"
+exists_if = "xmpp.cma"
+# OASIS_STOP
+
