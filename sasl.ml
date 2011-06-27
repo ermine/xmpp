@@ -1,5 +1,5 @@
 (*
- * (c) 2004-2010 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
+ * (c) 2004-2011 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
  *
  * RFC 2831 Digest SASL Mechanism
  * 
@@ -147,10 +147,7 @@ let parse_digest_md5_challenge str =
       raise (Error "Malformed SASL challenge")
 
 let sasl_digest_response chl username server passwd =
-  let str = MyBase64.decode chl in
-  let () =
-    print_endline str;
-    flush stdout in
+  let str = Cryptokit.transform_string (Cryptokit.Base64.decode ()) chl in
   let qop, nonce = parse_digest_md5_challenge str
   and cnonce = make_cnonce ()
   and nc = "00000001"
@@ -164,14 +161,12 @@ let sasl_digest_response chl username server passwd =
         "charset=utf-8,username=\"%s\",realm=\"%s\",nonce=\"%s\",cnonce=\"%s\",nc=%s,qop=\"%s\",digest-uri=\"%s\",response=%s"
         username realm nonce cnonce nc qop_method digest_uri response
       in
-        print_endline resp;
-        flush stdout;
-        MyBase64.encode resp
+        Cryptokit.transform_string (Cryptokit.Base64.encode_compact_pad ()) resp
     else
       raise (Error "No known qop methods")
 
 let sasl_digest_rspauth chl =
-  let str = MyBase64.decode chl in
+  let str = Cryptokit.transform_string (Cryptokit.Base64.decode ()) chl in
   let pairs = get_pairs str in
   let _rspauth = List.assoc "rspauth" pairs in
     ()

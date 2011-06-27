@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: d272d6fec05ff6a7ee7c229a646cf882)
+# DO NOT EDIT (digest: cded294b2a9b06b11e95b22564f7773f)
 Uni_data
 Uni_norm
 Stringprep
@@ -7,7 +7,6 @@ StreamError
 StanzaError
 Transport
 Xmlstream
-MyBase64
 Sasl
 XMPP
 JID

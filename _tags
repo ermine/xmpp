@@ -1,4 +1,17 @@
-true: debug
-<*.ml>: -warn_error_A, use_xml, use_mltls, use_treap, use_cryptokit
-<sasl.ml>: camlp4o, use_base64
-<test.*>: use_xml, use_treap, use_xmpp, use_unix, use_cryptokit, use_mltls, use_base64
+# OASIS_START
+# DO NOT EDIT (digest: 02745366b787ea0c964846c8a0e955f1)
+# Library xmpp
+# Executable test
+<test.{native,byte}>: use_xmpp
+<test.{native,byte}>: pkg_xml
+<test.{native,byte}>: pkg_treap
+<test.{native,byte}>: pkg_mltls
+<test.{native,byte}>: pkg_cryptokit
+<*.ml{,i}>: use_xmpp
+<*.ml{,i}>: pkg_xml
+<*.ml{,i}>: pkg_treap
+<*.ml{,i}>: pkg_mltls
+<*.ml{,i}>: pkg_cryptokit
+<test.{native,byte}>: custom
+# OASIS_STOP
+<sasl.ml>: syntax_camlp4o, pkg_camlp4

@@ -15,10 +15,10 @@ Description:
 Library xmpp
   Path:       .
   Modules:    Uni_data, Uni_norm, Stringprep, StreamError, StanzaError, 
-              Transport, Xmlstream, MyBase64, Sasl, XMPP, JID, XEP_last, 
+              Transport, Xmlstream, Sasl, XMPP, JID, XEP_last, 
               XEP_muc, XEP_stats, XEP_time, XEP_vcard, XEP_version, 
               XEP_xdata
-  BuildDepends: xml, treap, cryptokit, mltls
+  BuildDepends: xml, treap, cryptokit (>= 1.5), mltls
 
 Executable test
   Path: .
