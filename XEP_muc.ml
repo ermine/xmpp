@@ -496,3 +496,18 @@ struct
   let decode _el =
     ()
 end
+
+let enter_room xmpp ?maxchars ?maxstanzas ?seconds ?since ?password ?nick room =
+  let nick =
+    match nick with
+      | None ->
+        xmpp.myjid.node
+      | Some v -> v
+  in
+    send_presence xmpp ~jid_to:(replace_resource room nick)
+      ~x:[encode_muc ?maxchars ?maxstanzas ?seconds ?since ?password ()] ()
+
+let leave_room xmpp ?reason ~nick room =
+  send_presence xmpp ~jid_to:(replace_resource room nick)
+    ~kind:Unavailable ?status:reason ()
+    
