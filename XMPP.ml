@@ -1,5 +1,5 @@
 (*
- * (c) 2004-2010 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
+ * (c) 2004-2011 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
  *)
 
 open Xml
@@ -175,7 +175,7 @@ type message_stanza = message_content stanza
 
 let parse_message ~callback ~callback_error t _qname attrs els =
   let id, jid_from, jid_to, kind, lang = parse_stanza_attrs attrs in
-  let jid_from = maybe jid_of_string jid_from in
+  let jid_from = maybe JID.of_string jid_from in
     if kind = Some "error" then
       let err = StanzaError.parse_error
         (get_element (ns_client, "error") els) in
@@ -282,7 +282,7 @@ type presence_stanza = presence_content stanza
 
 let parse_presence ~callback ~callback_error t _qname attrs els =
   let id, jid_from, jid_to, kind, lang = parse_stanza_attrs attrs in
-  let jid_from = maybe jid_of_string jid_from in
+  let jid_from = maybe JID.of_string jid_from in
     if kind = Some "error" then
       let err = StanzaError.parse_error
         (get_element (ns_client, "error") els) in
@@ -465,7 +465,7 @@ let make_bind t session =
          | IQResult (Some el) ->
              let myjid = get_cdata
                (get_subelement (ns_xmpp_bind, "jid") el) in
-               t.myjid <- jid_of_string myjid;
+               t.myjid <- JID.of_string myjid;
                make_session t session
          | IQResult None
          | IQError _ ->

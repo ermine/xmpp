@@ -11,7 +11,7 @@ type jid = {
   lresource : string;
 }
 
-val jid_of_string : string -> jid
+val of_string : string -> jid
 val bare_jid : jid -> jid
 val domain : jid -> jid
 val string_of_jid : ?lowercase:bool -> jid -> string

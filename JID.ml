@@ -13,7 +13,7 @@ type jid = {
   lresource: string
 }
 
-let jid_of_string str =
+let of_string str =
   let bare_jid, resource = 
     try
 	    let r = String.index str '/' in

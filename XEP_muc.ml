@@ -141,8 +141,8 @@ struct
 
   let decode_decline el =
     let attrs = get_attrs el in
-    let jid_from = maybe jid_of_string (get_attr_value_option "from" attrs) in
-    let jid_to = maybe jid_of_string (get_attr_value_option "to" attrs) in
+    let jid_from = maybe JID.of_string (get_attr_value_option "from" attrs) in
+    let jid_to = maybe JID.of_string (get_attr_value_option "to" attrs) in
     let reason = get_subcdata_option (ns_muc_user, "reason") el in
       (jid_from, jid_to, reason)
   
@@ -155,7 +155,7 @@ struct
          | Some v -> [make_simple_cdata (ns_muc_user, "reason") v])
 
   let decode_destroy el =
-    let jid = maybe jid_of_string
+    let jid = maybe JID.of_string
       (get_attr_value_option "jid" (get_attrs el)) in
     let reason = get_subcdata_option (ns_muc_user, "reason") el in
       (jid, reason)
@@ -175,8 +175,8 @@ struct
   let decode_invite el =
     let reason = get_subcdata_option (ns_muc_user, "reason") el in
     let attrs = get_attrs el in
-    let jid_from = maybe jid_of_string (get_attr_value_option "from" attrs) in
-    let jid_to = maybe jid_of_string (get_attr_value_option "to" attrs) in
+    let jid_from = maybe JID.of_string (get_attr_value_option "from" attrs) in
+    let jid_to = maybe JID.of_string (get_attr_value_option "to" attrs) in
       (jid_from, jid_to, reason)
   
   let encode_item ?actor ?reason ?continue ?affiliation ?jid ?nick ?role () =
@@ -224,7 +224,7 @@ struct
   let decode_item el =
     let actor =
       try let subel = get_subelement (ns_muc_user, "actor") el in
-        Some (jid_of_string (get_attr_value "jid" (get_attrs subel)))
+        Some (JID.of_string (get_attr_value "jid" (get_attrs subel)))
       with Not_found -> None in
     let continue =
       try let subel = get_subelement (ns_muc_user, "continue") el in
@@ -242,7 +242,7 @@ struct
         | Some "none" -> Some AffiliationNone
         | Some _ -> Some AffiliationNone
     in
-    let jid = maybe jid_of_string (get_attr_value_option "jid" attrs) in
+    let jid = maybe JID.of_string (get_attr_value_option "jid" attrs) in
     let nick = get_attr_value_option "nick" attrs in
     let role =
       match get_attr_value_option "role" attrs with
@@ -416,7 +416,7 @@ struct
   let decode_item el =
     let actor =
       try let subel = get_subelement (ns_muc_admin, "actor") el in
-        Some (jid_of_string (get_attr_value "jid" (get_attrs subel)))
+        Some (JID.of_string (get_attr_value "jid" (get_attrs subel)))
       with Not_found -> None in
     let reason = get_subcdata_option (ns_muc_admin, "reason") el in
     let attrs = get_attrs el in
@@ -430,7 +430,7 @@ struct
         | Some "none" -> Some AffiliationNone
         | Some _ -> Some AffiliationNone
     in
-    let jid = maybe jid_of_string (get_attr_value_option "jid" attrs) in
+    let jid = maybe JID.of_string (get_attr_value_option "jid" attrs) in
     let nick = get_attr_value_option "nick" attrs in
     let role =
       match get_attr_value_option "role" attrs with
