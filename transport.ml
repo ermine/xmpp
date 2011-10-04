@@ -27,15 +27,10 @@ let read s () =
       close s;
       ""
     ) else (
-      let res = String.sub string 0 size in
-        Printf.printf "IN: %s\n" res;
-        flush Pervasives.stdout;
-        res
+      String.sub string 0 size
     )
           
 let send s string =
-  Printf.printf "OUT: %s\n" string;
-  flush Pervasives.stdout;
   let rec aux_send off =
     let size = Unix.write s string off (String.length string - off) in
       if off + size < String.length string then
@@ -60,11 +55,13 @@ let new_machine fd =
   let n = tls_SSL_set_fd ssl fd in
   let () =
     if n <> 1 then
+      (*
       let err = tls_SSL_get_error ssl n in
         Printf.eprintf "SSL_set_fd error code %s\n"
           (string_of_ssl_error err);
         flush Pervasives.stdout;
-        assert (n <> 1)
+      *)
+      assert (n <> 1)
   in      
   let () = tls_SSL_set_connect_state ssl in
     { ctx = ctx;
@@ -86,26 +83,21 @@ let rec tls_read machine () =
           let rcvd, _ = tls_SSL_get_shutdown machine.ssl in
             if rcvd then (
               (* normal shutdown *)
-              Printf.printf "TLS: normal shutdown\n";
-              flush Pervasives.stdout;
               ""
             ) else (* if err = SSL_ERROR_SYSCALL then *) (
               (* broken connection *)
+              (*
               Printf.eprintf "SSL_read error code n=%d %s\n" n
                 (string_of_ssl_error err);
               flush Pervasives.stderr;
+              *)
               ""
             )
         )
     else (* if n > 0 then *)
-      let s = String.sub buf 0 n in
-        Printf.printf "TLS IN: %s\n" s;
-        flush Pervasives.stdout;
-        s
+          String.sub buf 0 n
         
 let tls_send machine buf =
-  Printf.printf "TLS OUT: %s\n" buf;
-  flush Pervasives.stdout;
   let rec aux_send off =
     let n = tls_SSL_write machine.ssl buf off (String.length buf - off) in
       if n <= 0 then
@@ -114,8 +106,10 @@ let tls_send machine buf =
             (* continue negotation *)
             aux_send off
           else (
+            (*
             Printf.eprintf "SSL_write error code %s\n" (string_of_ssl_error err);
             flush Pervasives.stderr;
+            *)
             aux_send off
           )
       else

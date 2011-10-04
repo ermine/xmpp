@@ -1,5 +1,5 @@
 OASISFormat: 0.2
-Name:        xmpp
+Name:        erm_xmpp
 Version:     0.1
 Authors:     Anastasia Gornostaeva
 Copyrights:  (C) 2004 Anastasia Gornostaeva
@@ -12,13 +12,13 @@ Synopsis:    XMPP protocol implementation
 Description:
   TODO
 
-Library xmpp
+Library erm_xmpp
   Path:       .
   Modules:    Uni_data, Uni_norm, Stringprep, StreamError, StanzaError, 
               Transport, Xmlstream, Sasl, XMPP, JID, XEP_last, 
               XEP_muc, XEP_stats, XEP_time, XEP_vcard, XEP_version, 
               XEP_xdata
-  BuildDepends: xml, treap, cryptokit (>= 1.5), mltls
+  BuildDepends: erm_xml, erm_treap, cryptokit (>= 1.5), erm_tls
 
 Executable test
   Path: .
@@ -26,7 +26,7 @@ Executable test
   Custom: true
   CompiledObject: best
   MainIs: test.ml
-  BuildDepends: xmpp
+  BuildDepends: erm_xmpp
 
 Document api
   Title:      API reference
@@ -34,7 +34,7 @@ Document api
   Type: ocamlbuild (0.2)
   BuildTools: ocamldoc
   XOcamlbuildPath: .
-  XOcamlbuildLibraries: xmpp
+  XOcamlbuildLibraries: erm_xmpp
 
 SourceRepository github
   Type:     git

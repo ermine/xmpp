@@ -1,16 +1,16 @@
 # OASIS_START
-# DO NOT EDIT (digest: 02745366b787ea0c964846c8a0e955f1)
-# Library xmpp
+# DO NOT EDIT (digest: 13c8c00afb9706aa766846bab3790cb2)
+# Library erm_xmpp
 # Executable test
-<test.{native,byte}>: use_xmpp
-<test.{native,byte}>: pkg_xml
-<test.{native,byte}>: pkg_treap
-<test.{native,byte}>: pkg_mltls
+<test.{native,byte}>: use_erm_xmpp
+<test.{native,byte}>: pkg_erm_xml
+<test.{native,byte}>: pkg_erm_treap
+<test.{native,byte}>: pkg_erm_tls
 <test.{native,byte}>: pkg_cryptokit
-<*.ml{,i}>: use_xmpp
-<*.ml{,i}>: pkg_xml
-<*.ml{,i}>: pkg_treap
-<*.ml{,i}>: pkg_mltls
+<*.ml{,i}>: use_erm_xmpp
+<*.ml{,i}>: pkg_erm_xml
+<*.ml{,i}>: pkg_erm_treap
+<*.ml{,i}>: pkg_erm_tls
 <*.ml{,i}>: pkg_cryptokit
 <test.{native,byte}>: custom
 # OASIS_STOP

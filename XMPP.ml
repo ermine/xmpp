@@ -18,21 +18,21 @@ type id = string
 module ID =
 struct
   type t = id
-  let compare = compare
+  let compare = Pervasives.compare
 end
 module IDCallback = Treap.Map(ID)
 
 module NS =
 struct
   type t = Xml.namespace
-  let compare = compare
+  let compare = Pervasives.compare
 end
 module IQRequestCallback = Map.Make(NS)
 
 module Qname =
 struct
   type t = Xml.qname
-  let compare = compare
+  let compare = Pervasives.compare
 end
 module StanzaHandler =Map.Make(Qname)
 

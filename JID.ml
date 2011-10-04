@@ -71,6 +71,10 @@ let equal jid1 jid2 =
   jid1.ldomain = jid2.ldomain &&
   jid1.lresource = jid2.lresource
   
+let compare jid1 jid2 = Pervasives.compare
+  (jid1.lnode, jid1.ldomain, jid1.lresource)
+  (jid2.lnode, jid2.ldomain, jid2.lresource)
+
 let make_jid node domain resource =
   {
     node = node;

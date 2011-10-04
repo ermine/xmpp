@@ -22,5 +22,6 @@ val is_node : jid -> bool
 val is_bare_node : jid -> bool
 val is_domain : jid -> bool
 val equal : jid -> jid -> bool
+val compare: jid -> jid -> int
 val make_jid: string -> string -> string -> jid
 val replace_resource : jid -> string -> jid
