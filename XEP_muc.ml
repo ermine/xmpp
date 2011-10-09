@@ -109,19 +109,19 @@ module User =
 struct
 
   type item = {
-    actor : jid option;
+    actor : JID.t option;
     continue : string option;
     reason : string option;
-    jid : jid option;
+    jid : JID.t option;
     nick : string option;
     affiliation : affiliation option;
     role : role option
   }
     
   type  data = {
-    decline : (JID.jid option * JID.jid option * string option) option;
-    destroy : (JID.jid option * string option) option;
-    invite : (JID.jid option * JID.jid option * string option) list;
+    decline : (JID.t option * JID.t option * string option) option;
+    destroy : (JID.t option * string option) option;
+    invite : (JID.t option * JID.t option * string option) list;
     item : item option;
     password : string option;
     status : int list
@@ -405,9 +405,9 @@ struct
          ])
       
   type item = {
-    actor : jid option;
+    actor : JID.t option;
     reason : string option;
-    jid : jid option;
+    jid : JID.t option;
     nick : string option;
     affiliation : affiliation option;
     role : role option

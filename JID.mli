@@ -2,7 +2,7 @@
  * (c) 2004-2009 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
  *)
 
-type jid = {
+type t = {
   node : string;
   lnode : string;
   domain : string;
@@ -11,17 +11,17 @@ type jid = {
   lresource : string;
 }
 
-val of_string : string -> jid
-val bare_jid : jid -> jid
-val domain : jid -> jid
-val string_of_jid : ?lowercase:bool -> jid -> string
-val tolower : jid -> string
+val of_string : string -> t
+val bare_jid : t -> t
+val domain : t -> t
+val string_of_jid : ?lowercase:bool -> t -> string
+val tolower : t -> string
 
-val is_bare : jid -> bool
-val is_node : jid -> bool
-val is_bare_node : jid -> bool
-val is_domain : jid -> bool
-val equal : jid -> jid -> bool
-val compare: jid -> jid -> int
-val make_jid: string -> string -> string -> jid
-val replace_resource : jid -> string -> jid
+val is_bare : t -> bool
+val is_node : t -> bool
+val is_bare_node : t -> bool
+val is_domain : t -> bool
+val equal : t -> t -> bool
+val compare : t -> t -> int
+val make_jid : string -> string -> string -> t
+val replace_resource : t -> string -> t

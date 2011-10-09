@@ -4,7 +4,7 @@
 
 exception InvalidJID
  
-type jid = {
+type t = {
   node: string;
   lnode: string;
   domain: string;

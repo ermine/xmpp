@@ -68,7 +68,7 @@ type 'a t = {
                             iq_response) IQRequestCallback.t;
   mutable stanza_handlers : ('a t -> Xml.qname -> Xml.attribute list ->
                                Xml.element list -> unit) StanzaHandler.t;
-  mutable myjid : jid;
+  mutable myjid : JID.t;
   p : Xmlstream.t;
   data : 'a
 }
@@ -145,7 +145,7 @@ let make_iq_request t ?jid_from ?jid_to ?lang request callback =
       
 type 'a stanza = {
   id : id option;
-  jid_from : JID.jid option;
+  jid_from : JID.t option;
   jid_to : string option;
   lang : string option;
   content : 'a;
