@@ -1,5 +1,5 @@
 (*
- * (c) 2004-2010 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
+ * (c) 2004-2011 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
  *
  * XEP-0092: Software Version
  * Version: 1.1
@@ -28,15 +28,45 @@ let encode t =
                           "os", t.os;
                           "version", t.version])
     
-let decode el =
-  try
-    let els = get_children el in
-    let name = get_cdata (get_element (ns_version, "name") els) in
-    let version = get_cdata (get_element (ns_version, "version") els) in
-    let os =
-      try get_cdata (get_element (ns_version, "os") els) with Not_found -> "" in
-      Some {name = name; version = version; os = os}
-  with Not_found -> None
-
+let decode _attrs els =
+  let result =
+    List.fold_left (fun item -> function
+      | Xmlelement ((ns_version, "name"), _, _) as el ->
+        let value = get_cdata el in
+          {item with name = value}
+      | Xmlelement ((ns_version, "version"), _, _) as el ->
+        let value = get_cdata el in
+          {item with version = value}
+      | Xmlelement ((ns_version, "os"), _, _) as el ->
+        let value = get_cdata el in
+          {item with os = value}
+      | _ -> item
+    ) {name = "";
+       version = "";
+       os = ""
+      } els in
+    if result.name = "" && result.version = "" then
+      None
+    else
+      Some result
+      
 let make_iq_get () =
   make_element (ns_version, "query") [] []
+
+let get xmpp ?jid_from ?jid_to ?lang ?(error_callback=ignore) callback =
+  let callback ev _jid_from _jid_to _lang () =
+    match ev with
+      | IQResult el -> (
+        match el with
+          | Some (Xmlelement ((ns_version, "query"), attrs, els)) ->
+            callback ?jid_from ?jid_to ?lang (Some (decode attrs els))
+          | _ ->
+            callback ?jid_from ?jid_to ?lang None
+      )
+      | IQError err ->
+        error_callback err
+  in
+    make_iq_request xmpp ?jid_from ?jid_to ?lang
+      (IQGet (make_element (ns_version, "query") [] []))
+    callback
+  

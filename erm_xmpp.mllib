@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: cded294b2a9b06b11e95b22564f7773f)
+# DO NOT EDIT (digest: 48fd60312af0cee2c6d982adedda6d72)
 Uni_data
 Uni_norm
 Stringprep
@@ -10,6 +10,8 @@ Xmlstream
 Sasl
 XMPP
 JID
+Roster
+XEP_disco
 XEP_last
 XEP_muc
 XEP_stats

@@ -14,9 +14,22 @@ Description:
 
 Library erm_xmpp
   Path:       .
-  Modules:    Uni_data, Uni_norm, Stringprep, StreamError, StanzaError, 
-              Transport, Xmlstream, Sasl, XMPP, JID, XEP_last, 
-              XEP_muc, XEP_stats, XEP_time, XEP_vcard, XEP_version, 
+  Modules:    Uni_data, Uni_norm, Stringprep, 
+              StreamError, 
+              StanzaError, 
+              Transport, 
+              Xmlstream, 
+              Sasl, 
+              XMPP,
+              JID, 
+              Roster,
+              XEP_disco,
+              XEP_last, 
+              XEP_muc, 
+              XEP_stats, 
+              XEP_time, 
+              XEP_vcard, 
+              XEP_version, 
               XEP_xdata
   BuildDepends: erm_xml, erm_treap, cryptokit (>= 1.5), erm_tls
 
