@@ -49,9 +49,6 @@ let decode _attrs els =
       None
     else
       Some result
-      
-let make_iq_get () =
-  make_element (ns_version, "query") [] []
 
 let get xmpp ?jid_from ?jid_to ?lang ?(error_callback=ignore) callback =
   let callback ev _jid_from _jid_to _lang () =
@@ -59,7 +56,7 @@ let get xmpp ?jid_from ?jid_to ?lang ?(error_callback=ignore) callback =
       | IQResult el -> (
         match el with
           | Some (Xmlelement ((ns_version, "query"), attrs, els)) ->
-            callback ?jid_from ?jid_to ?lang (Some (decode attrs els))
+            callback ?jid_from ?jid_to ?lang (decode attrs els)
           | _ ->
             callback ?jid_from ?jid_to ?lang None
       )
@@ -70,3 +67,13 @@ let get xmpp ?jid_from ?jid_to ?lang ?(error_callback=ignore) callback =
       (IQGet (make_element (ns_version, "query") [] []))
     callback
   
+let iq_request ~get =
+  (fun ev jid_from jid_to lang () ->
+    match ev with
+      | IQGet _el ->
+        let t = get ?jid_from ?jid_to ?lang () in
+        let el = encode t in
+          IQResult (Some el)
+      | IQSet _el ->
+        raise BadRequest
+  )
