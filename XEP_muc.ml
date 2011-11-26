@@ -1,5 +1,5 @@
 (*
- * (c) 2004-2010 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
+ * (c) 2004-2010 Anastasia Gornostaeva
  *
  * XWP-0045 Multi-User Chat
  * Version: 1.24

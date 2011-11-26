@@ -1,5 +1,5 @@
 (*
- * (c) 2004-2011 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
+ * (c) 2004-2011 Anastasia Gornostaeva
  *)
 
 open Xml

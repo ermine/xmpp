@@ -1,6 +1,6 @@
-(*                                                                          *)
-(* (c) 2006-2011 Anastasia Gornostaeva. <ermine@ermine.pp.ru>                    *)
-(*                                                                          *)
+(*
+ * (c) 2006-2011 Anastasia Gornostaeva
+ *)
 
 open Light_xml
 open XMPP

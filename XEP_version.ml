@@ -1,5 +1,5 @@
 (*
- * (c) 2004-2011 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
+ * (c) 2004-2011 Anastasia Gornostaeva
  *
  * XEP-0092: Software Version
  * Version: 1.1

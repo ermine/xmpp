@@ -1,5 +1,5 @@
 (*
- * (c) 2004-2010 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
+ * (c) 2004-2010 Anastasia Gornostaeva
  *
  * XEP-0054: vcard-temp
  * Version: 1.2

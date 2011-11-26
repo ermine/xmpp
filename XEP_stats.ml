@@ -1,5 +1,5 @@
 (*
- * (c) 2004-2010 Anastasia Gornostaeva. <ermine@ermine.pp.ru>
+ * (c) 2004-2010 Anastasia Gornostaeva
  *
  *  XEP-0039: Statistics Gathering
  *  Version: 0.6.0
