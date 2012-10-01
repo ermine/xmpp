@@ -1,11 +1,11 @@
-OASISFormat: 0.2
+OASISFormat: 0.3
 Name:        erm_xmpp
-Version:     0.1
+Version:     0.2
 Authors:     Anastasia Gornostaeva
 Copyrights:  (C) 2004 Anastasia Gornostaeva
 License:     BSD3
 LicenseFile: LICENCE
-Plugins:     DevFiles (0.2), META (0.2)
+Plugins:     DevFiles (0.3), META (0.3)
 BuildTools:  ocamlbuild
 
 Synopsis:    XMPP protocol implementation
@@ -21,16 +21,16 @@ Library erm_xmpp
               Xmlstream, 
               Sasl, 
               XMPP,
-              JID, 
-              Roster,
-              XEP_disco,
-              XEP_last, 
-              XEP_muc, 
-              XEP_stats, 
-              XEP_time, 
-              XEP_vcard, 
-              XEP_version, 
-              XEP_xdata
+              JID,
+#              Roster,
+#              XEP_disco,
+#              XEP_last, 
+#              XEP_muc, 
+#              XEP_stats, 
+#              XEP_time, 
+#              XEP_vcard, 
+              XEP_version
+#              XEP_xdata
   BuildDepends: erm_xml, erm_treap, cryptokit (>= 1.5), erm_tls
 
 Executable test
@@ -41,13 +41,20 @@ Executable test
   MainIs: test.ml
   BuildDepends: erm_xmpp
 
-Document api
-  Title:      API reference
-  InstallDir: $docdir
-  Type: ocamlbuild (0.2)
-  BuildTools: ocamldoc
-  XOcamlbuildPath: .
-  XOcamlbuildLibraries: erm_xmpp
+Executable lwt_test
+  Path: .
+  Install: false
+  CompiledObject: best
+  MainIs: lwt_test.ml  
+  BuildDepends: erm_xmpp, lwt, lwt.ssl
+
+# Document api
+#   Title:      API reference
+#   InstallDir: $docdir
+#   Type: ocamlbuild (0.2)
+#   BuildTools: ocamldoc
+#   XOcamlbuildPath: .
+#   XOcamlbuildLibraries: erm_xmpp
 
 SourceRepository github
   Type:     git

@@ -1,12 +1,12 @@
 (* OASIS_START *)
-(* DO NOT EDIT (digest: fbafecde9b29d5c56b25fef8c6621d2c) *)
+(* DO NOT EDIT (digest: 18e2b9ccc5152468b4064e34b75e7945) *)
 module OASISGettext = struct
 # 21 "/usr/home/ermine/projects/ocaml/src/oasis/src/oasis/OASISGettext.ml"
   
-  let ns_ str = 
+  let ns_ str =
     str
   
-  let s_ str = 
+  let s_ str =
     str
   
   let f_ (str : ('a, 'b, 'c, 'd) format4) =
@@ -18,7 +18,7 @@ module OASISGettext = struct
     else
       fmt2^^""
   
-  let init = 
+  let init =
     []
   
 end
@@ -46,18 +46,18 @@ module OASISExpr = struct
   type 'a choices = (t * 'a) list 
   
   let eval var_get t =
-    let rec eval' = 
+    let rec eval' =
       function
         | EBool b ->
             b
   
-        | ENot e -> 
+        | ENot e ->
             not (eval' e)
   
         | EAnd (e1, e2) ->
             (eval' e1) && (eval' e2)
   
-        | EOr (e1, e2) -> 
+        | EOr (e1, e2) ->
             (eval' e1) || (eval' e2)
   
         | EFlag nm ->
@@ -76,19 +76,19 @@ module OASISExpr = struct
       eval' t
   
   let choose ?printer ?name var_get lst =
-    let rec choose_aux = 
+    let rec choose_aux =
       function
         | (cond, vl) :: tl ->
-            if eval var_get cond then 
-              vl 
+            if eval var_get cond then
+              vl
             else
               choose_aux tl
         | [] ->
-            let str_lst = 
+            let str_lst =
               if lst = [] then
                 s_ "<empty>"
               else
-                String.concat 
+                String.concat
                   (s_ ", ")
                   (List.map
                      (fun (cond, vl) ->
@@ -97,10 +97,10 @@ module OASISExpr = struct
                           | None -> s_ "<no printer>")
                      lst)
             in
-              match name with 
+              match name with
                 | Some nm ->
                     failwith
-                      (Printf.sprintf 
+                      (Printf.sprintf
                          (f_ "No result for the choice list '%s': %s")
                          nm str_lst)
                 | None ->
@@ -114,6 +114,7 @@ module OASISExpr = struct
 end
 
 
+# 117 "myocamlbuild.ml"
 module BaseEnvLight = struct
 # 21 "/usr/home/ermine/projects/ocaml/src/oasis/src/base/BaseEnvLight.ml"
   
@@ -122,7 +123,7 @@ module BaseEnvLight = struct
   type t = string MapString.t
   
   let default_filename =
-    Filename.concat 
+    Filename.concat
       (Sys.getcwd ())
       "setup.data"
   
@@ -138,23 +139,23 @@ module BaseEnvLight = struct
         let line =
           ref 1
         in
-        let st_line = 
+        let st_line =
           Stream.from
             (fun _ ->
                try
-                 match Stream.next st with 
+                 match Stream.next st with
                    | '\n' -> incr line; Some '\n'
                    | c -> Some c
                with Stream.Failure -> None)
         in
-        let lexer = 
+        let lexer =
           Genlex.make_lexer ["="] st_line
         in
         let rec read_file mp =
-          match Stream.npeek 3 lexer with 
+          match Stream.npeek 3 lexer with
             | [Genlex.Ident nm; Genlex.Kwd "="; Genlex.String value] ->
-                Stream.junk lexer; 
-                Stream.junk lexer; 
+                Stream.junk lexer;
+                Stream.junk lexer;
                 Stream.junk lexer;
                 read_file (MapString.add nm value mp)
             | [] ->
@@ -177,8 +178,8 @@ module BaseEnvLight = struct
       end
     else
       begin
-        failwith 
-          (Printf.sprintf 
+        failwith
+          (Printf.sprintf
              "Unable to load environment, the file '%s' doesn't exist."
              filename)
       end
@@ -188,29 +189,30 @@ module BaseEnvLight = struct
       let buff =
         Buffer.create ((String.length str) * 2)
       in
-        Buffer.add_substitute 
+        Buffer.add_substitute
           buff
-          (fun var -> 
-             try 
+          (fun var ->
+             try
                var_expand (MapString.find var env)
              with Not_found ->
-               failwith 
-                 (Printf.sprintf 
+               failwith
+                 (Printf.sprintf
                     "No variable %s defined when trying to expand %S."
-                    var 
+                    var
                     str))
           str;
         Buffer.contents buff
     in
       var_expand (MapString.find name env)
   
-  let var_choose lst env = 
+  let var_choose lst env =
     OASISExpr.choose
       (fun nm -> var_get nm env)
       lst
 end
 
 
+# 215 "myocamlbuild.ml"
 module MyOCamlbuildFindlib = struct
 # 21 "/usr/home/ermine/projects/ocaml/src/oasis/src/plugins/ocamlbuild/MyOCamlbuildFindlib.ml"
   
@@ -232,19 +234,21 @@ module MyOCamlbuildFindlib = struct
     Ocamlbuild_pack.Lexers.blank_sep_strings
   
   let split s ch =
-    let x = 
-      ref [] 
+    let buf = Buffer.create 13 in
+    let x = ref [] in
+    let flush () = 
+      x := (Buffer.contents buf) :: !x;
+      Buffer.clear buf
     in
-    let rec go s =
-      let pos = 
-        String.index s ch 
-      in
-        x := (String.before s pos)::!x;
-        go (String.after s (pos + 1))
-    in
-      try
-        go s
-      with Not_found -> !x
+      String.iter 
+        (fun c ->
+           if c = ch then 
+             flush ()
+           else
+             Buffer.add_char buf c)
+        s;
+      flush ();
+      List.rev !x
   
   let split_nl s = split s '\n'
   
@@ -311,6 +315,7 @@ module MyOCamlbuildFindlib = struct
            * the "threads" package using the previous plugin.
            *)
           flag ["ocaml"; "pkg_threads"; "compile"] (S[A "-thread"]);
+          flag ["ocaml"; "pkg_threads"; "doc"] (S[A "-I"; A "+threads"]);
           flag ["ocaml"; "pkg_threads"; "link"] (S[A "-thread"]);
           flag ["ocaml"; "pkg_threads"; "infer_interface"] (S[A "-thread"])
   
@@ -329,19 +334,24 @@ module MyOCamlbuildBase = struct
   
   
   open Ocamlbuild_plugin
+  module OC = Ocamlbuild_pack.Ocaml_compiler
   
   type dir = string 
   type file = string 
   type name = string 
   type tag = string 
   
-# 55 "/usr/home/ermine/projects/ocaml/src/oasis/src/plugins/ocamlbuild/MyOCamlbuildBase.ml"
+# 56 "/usr/home/ermine/projects/ocaml/src/oasis/src/plugins/ocamlbuild/MyOCamlbuildBase.ml"
   
   type t =
       {
         lib_ocaml: (name * dir list) list;
         lib_c:     (name * dir * file list) list; 
         flags:     (tag list * (spec OASISExpr.choices)) list;
+        (* Replace the 'dir: include' from _tags by a precise interdepends in
+         * directory.
+         *)
+        includes:  (dir * dir list) list; 
       } 
   
   let env_filename =
@@ -353,6 +363,12 @@ module MyOCamlbuildBase = struct
       List.iter 
         (fun dispatch -> dispatch e)
         lst 
+  
+  let tag_libstubs nm =
+    "use_lib"^nm^"_stubs"
+  
+  let nm_libstubs nm =
+    nm^"_stubs"
   
   let dispatch t e = 
     let env = 
@@ -385,36 +401,47 @@ module MyOCamlbuildBase = struct
             (* Declare OCaml libraries *)
             List.iter 
               (function
-                 | lib, [] ->
-                     ocaml_lib lib;
-                 | lib, dir :: tl ->
-                     ocaml_lib ~dir:dir lib;
+                 | nm, [] ->
+                     ocaml_lib nm
+                 | nm, dir :: tl ->
+                     ocaml_lib ~dir:dir (dir^"/"^nm);
                      List.iter 
                        (fun dir -> 
-                          flag 
-                            ["ocaml"; "use_"^lib; "compile"] 
-                            (S[A"-I"; P dir]))
+                          List.iter
+                            (fun str ->
+                               flag ["ocaml"; "use_"^nm; str] (S[A"-I"; P dir]))
+                            ["compile"; "infer_interface"; "doc"])
                        tl)
               t.lib_ocaml;
+  
+            (* Declare directories dependencies, replace "include" in _tags. *)
+            List.iter 
+              (fun (dir, include_dirs) ->
+                 Pathname.define_context dir include_dirs)
+              t.includes;
   
             (* Declare C libraries *)
             List.iter
               (fun (lib, dir, headers) ->
                    (* Handle C part of library *)
-                   flag ["link"; "library"; "ocaml"; "byte"; "use_lib"^lib]
-                     (S[A"-dllib"; A("-l"^lib); A"-cclib"; A("-l"^lib)]);
+                   flag ["link"; "library"; "ocaml"; "byte"; tag_libstubs lib]
+                     (S[A"-dllib"; A("-l"^(nm_libstubs lib)); A"-cclib";
+                        A("-l"^(nm_libstubs lib))]);
   
-                   flag ["link"; "library"; "ocaml"; "native"; "use_lib"^lib]
-                     (S[A"-cclib"; A("-l"^lib)]);
+                   flag ["link"; "library"; "ocaml"; "native"; tag_libstubs lib]
+                     (S[A"-cclib"; A("-l"^(nm_libstubs lib))]);
                         
-                   flag ["link"; "program"; "ocaml"; "byte"; "use_lib"^lib]
-                     (S[A"-dllib"; A("dll"^lib)]);
+                   flag ["link"; "program"; "ocaml"; "byte"; tag_libstubs lib]
+                     (S[A"-dllib"; A("dll"^(nm_libstubs lib))]);
   
                    (* When ocaml link something that use the C library, then one
                       need that file to be up to date.
                     *)
-                   dep  ["link"; "ocaml"; "use_lib"^lib] 
-                     [dir/"lib"^lib^"."^(!Options.ext_lib)];
+                   dep ["link"; "ocaml"; "program"; tag_libstubs lib]
+                     [dir/"lib"^(nm_libstubs lib)^"."^(!Options.ext_lib)];
+  
+                   dep  ["compile"; "ocaml"; "program"; tag_libstubs lib]
+                     [dir/"lib"^(nm_libstubs lib)^"."^(!Options.ext_lib)];
   
                    (* TODO: be more specific about what depends on headers *)
                    (* Depends on .h files *)
@@ -448,12 +475,19 @@ module MyOCamlbuildBase = struct
 end
 
 
+# 478 "myocamlbuild.ml"
 open Ocamlbuild_plugin;;
 let package_default =
-  {MyOCamlbuildBase.lib_ocaml = [("erm_xmpp", [])]; lib_c = []; flags = []; }
+  {
+     MyOCamlbuildBase.lib_ocaml = [("erm_xmpp", [])];
+     lib_c = [];
+     flags = [];
+     includes = [];
+     }
   ;;
 
 let dispatch_default = MyOCamlbuildBase.dispatch_default package_default;;
 
+# 492 "myocamlbuild.ml"
 (* OASIS_STOP *)
 Ocamlbuild_plugin.dispatch dispatch_default;;

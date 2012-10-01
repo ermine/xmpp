@@ -1,17 +1,41 @@
 # OASIS_START
-# DO NOT EDIT (digest: 13c8c00afb9706aa766846bab3790cb2)
+# DO NOT EDIT (digest: 2b2ff97112910c18411b7695ae85c6b7)
+# Ignore VCS directories, you can use the same kind of rule outside 
+# OASIS_START/STOP if you want to exclude directories that contains 
+# useless stuff for the build process
+<**/.svn>: -traverse
+<**/.svn>: not_hygienic
+".bzr": -traverse
+".bzr": not_hygienic
+".hg": -traverse
+".hg": not_hygienic
+".git": -traverse
+".git": not_hygienic
+"_darcs": -traverse
+"_darcs": not_hygienic
 # Library erm_xmpp
+"erm_xmpp.cmxs": use_erm_xmpp
 # Executable test
 <test.{native,byte}>: use_erm_xmpp
 <test.{native,byte}>: pkg_erm_xml
 <test.{native,byte}>: pkg_erm_treap
-<test.{native,byte}>: pkg_erm_tls
 <test.{native,byte}>: pkg_cryptokit
+<test.{native,byte}>: pkg_erm_tls
+<test.{native,byte}>: custom
+# Executable lwt_test
+<lwt_test.{native,byte}>: use_erm_xmpp
+<lwt_test.{native,byte}>: pkg_lwt
+<lwt_test.{native,byte}>: pkg_lwt.ssl
+<lwt_test.{native,byte}>: pkg_erm_xml
+<lwt_test.{native,byte}>: pkg_erm_treap
+<lwt_test.{native,byte}>: pkg_cryptokit
+<lwt_test.{native,byte}>: pkg_erm_tls
 <*.ml{,i}>: use_erm_xmpp
+<*.ml{,i}>: pkg_lwt
+<*.ml{,i}>: pkg_lwt.ssl
 <*.ml{,i}>: pkg_erm_xml
 <*.ml{,i}>: pkg_erm_treap
-<*.ml{,i}>: pkg_erm_tls
 <*.ml{,i}>: pkg_cryptokit
-<test.{native,byte}>: custom
+<*.ml{,i}>: pkg_erm_tls
 # OASIS_STOP
 <sasl.ml>: syntax_camlp4o, pkg_camlp4

@@ -2,10 +2,47 @@
  * (c) 2004-2010 Anastasia Gornostaeva
  *)
 
-open Unix
-  
-let can_tls = true
+module type TRANSPORT =
+sig
+  type 'a t
+  val return : 'a -> 'a t
+  val fail : exn -> 'a t
+  val (>>=) : 'a t -> ('a -> 'b t) -> 'b t
+  val catch : (unit -> 'a t) -> (exn -> 'a t) -> 'a t
 
+  type socket
+  val can_tls : bool
+  val can_compress : bool
+  val open_connection : Unix.sockaddr -> socket t
+  val get : socket -> char option t
+  val send : socket -> string -> unit t
+  val switch_tls : socket -> unit t
+  val close : socket -> unit t
+end
+
+open Unix
+
+module SimpleTransport =
+struct
+  type 'a t = 'a
+  type socket = {
+    inc : in_channel;
+    outc : out_channel;
+    strm : char Stream.t;
+  }
+  let open_connection sockaddr =
+    let inc, outc = Unix.open_connection sockaddr in
+      {inc = inc; strm = Stream.of_channel inc; outc = outc}
+  let peek s = Stream.peek s.strm
+  let junk s = Stream.junk s.strm
+  let send s = output_string s.outc
+  let close s =
+    close_in s.inc;
+    close_out s.outc
+end
+  
+(*
+  
 type t = {
   fd : file_descr;
   mutable read: unit -> string;
@@ -124,3 +161,4 @@ let switch socket =
   let tls = new_machine socket.fd in
     socket.send <- tls_send tls;
     socket.read <- tls_read tls
+*)
