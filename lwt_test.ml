@@ -83,8 +83,7 @@ struct
 end
 module IDCallback = Map.Make(ID)
 
-module XMPPClient = XMPP.Make (LWTTransport)
-  (IDCallback) (struct type user_data = unit end)
+module XMPPClient = XMPP.Make (LWTTransport) (IDCallback)
 
 open XMPPClient
 

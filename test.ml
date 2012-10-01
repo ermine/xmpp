@@ -72,8 +72,7 @@ struct
   let find key t = fst (T.find t key)
 end
 
-module XMPPClient = Make (SimpleTransport)
-  (IDCallback) (struct type user_data = unit end)
+module XMPPClient = Make (SimpleTransport) (IDCallback)
 
 open XMPPClient
 

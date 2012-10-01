@@ -50,11 +50,10 @@ sig
     | IQResponse of iq_response
 
 
-  type user_data
-  type session_data
+  type 'a session_data
 
   val make_iq_request :
-    session_data ->
+    'a session_data ->
     ?jid_from:JID.t ->
     ?jid_to:JID.t ->
     ?lang:Xml.cdata ->
@@ -86,7 +85,7 @@ sig
   }
 
   val send_message :
-    session_data ->
+    'a session_data ->
     ?id:Xml.cdata ->
     ?jid_from:JID.t ->
     ?jid_to:JID.t ->
@@ -98,8 +97,7 @@ sig
       
 end
 
-module Make (T : TRANSPORT) (IDCallback : IDCALLBACK)
-  (U : sig type user_data end) =
+module Make (T : TRANSPORT) (IDCallback : IDCALLBACK) =
 struct
   open T
 
@@ -147,9 +145,7 @@ struct
     | IQRequest of iq_request
     | IQResponse of iq_response
 
-  type user_data = U.user_data
-
-  type session_data = {
+  type 'a session_data = {
     socket : T.socket;
     mutable sid : int;
     xmllang : string;
@@ -160,11 +156,11 @@ struct
       (iq_request -> string option -> string option -> string option -> unit ->
        iq_response t) IQRequestCallback.t;
     mutable stanza_handlers :
-      (session_data -> Xml.attribute list -> Xml.element list ->
+      ('a session_data -> Xml.attribute list -> Xml.element list ->
        unit t) StanzaHandler.t;
     mutable myjid : JID.t;
     ser: Xml.Serialization.t;
-    user_data : user_data
+    user_data : 'a
   }
       
   let string_of_option opt = match opt with None -> "" | Some v -> v
