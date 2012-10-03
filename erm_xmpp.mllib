@@ -1,11 +1,10 @@
 # OASIS_START
-# DO NOT EDIT (digest: e82df102c254923ea81ab242a4481a87)
+# DO NOT EDIT (digest: bc76a35c33097ce7ef1becfbb0cdf4a7)
 Uni_data
 Uni_norm
 Stringprep
 StreamError
 StanzaError
-Transport
 Xmlstream
 Sasl
 XMPP

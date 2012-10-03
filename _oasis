@@ -17,7 +17,6 @@ Library erm_xmpp
   Modules:    Uni_data, Uni_norm, Stringprep, 
               StreamError, 
               StanzaError, 
-              Transport, 
               Xmlstream, 
               Sasl, 
               XMPP,
@@ -31,7 +30,7 @@ Library erm_xmpp
 #              XEP_vcard, 
               XEP_version
 #              XEP_xdata
-  BuildDepends: erm_xml, erm_treap, cryptokit (>= 1.5), erm_tls
+  BuildDepends: erm_xml, cryptokit (>= 1.5)
 
 Executable test
   Path: .
@@ -39,14 +38,14 @@ Executable test
   Custom: true
   CompiledObject: best
   MainIs: test.ml
-  BuildDepends: erm_xmpp
+  BuildDepends: erm_xmpp, erm_treap
 
 Executable lwt_test
   Path: .
   Install: false
   CompiledObject: best
   MainIs: lwt_test.ml  
-  BuildDepends: erm_xmpp, lwt, lwt.ssl
+  BuildDepends: erm_xmpp, lwt, lwt.ssl, erm_treap
 
 # Document api
 #   Title:      API reference

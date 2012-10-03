@@ -6,7 +6,6 @@ open Xml
 open Xmlstream
 open StanzaError
 open JID
-open Transport  
 
 type reset_reason =
   | StartTLS
