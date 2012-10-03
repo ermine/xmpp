@@ -8,21 +8,23 @@ open Xml.Serialization
 module type MONAD =
 sig
   type 'a t
-  val return : 'a -> 'a t
+  val return : 'a  -> 'a t
   val (>>=) : 'a t -> ('a -> 'b t) -> 'b t
   val fail : exn -> 'a t
   val catch : (unit -> 'a t) -> (exn -> 'a t) -> 'a t
 end
 
-module type INPUT =
+module type TRANSPORT =
 sig
-  type 'a t
-  type stream
-  val get : stream -> char option t
+  type 'a z
+  type socket
+  val get : socket -> char option z
+  val send : socket -> string -> unit z
 end
 
-module IStream (T: Transport.TRANSPORT) =
+module IStream (M : MONAD) (T : TRANSPORT with type 'a z = 'a M.t) =
 struct
+  include M
   include T
 
   type source = T.socket
@@ -32,7 +34,8 @@ struct
   let set_decoder encname strm =
     if encname = "UTF-8" then () else assert false
 
-  module D = Xmllexer.Decoder (struct include T type stream = T.socket end)
+  module D = Xmllexer.Decoder (struct include M
+                                      include T type stream = T.socket end)
 
   let make_stream source =
     fun () -> D.decode_utf8 source
@@ -81,17 +84,17 @@ struct
 end
 
 
-module XmlStream (T : Transport.TRANSPORT) =
+module XmlStream (M: MONAD) (T : TRANSPORT with type 'a z = 'a M.t) =
 struct
 
   module XmlParser = Xmllexer_generic.Make
-    (IStream (T))
+    (IStream (M)(T))
     (Xmllexer.Encoding)
-    (XmlStanza (T))
+    (XmlStanza (M))
     
-  let (>>=) = T.(>>=)
+  let (>>=) = M.(>>=)
 
-  module XmlStanza = XmlStanza (T)
+  module XmlStanza = XmlStanza (M)
   open XmlStanza
 
   let parse stream_start stanza stream_end strm =
@@ -154,7 +157,7 @@ struct
             | _ -> loop ()
         )
         | None ->
-          T.return ()
+          M.return ()
     in
       loop ()
 end

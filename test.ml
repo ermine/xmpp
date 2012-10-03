@@ -1,14 +1,19 @@
 open XMPP
 open StanzaError
 
-module SimpleTransport =
+module UnitMonad =
 struct
   type 'a t = 'a
   let return x = x
   let (>>=) v f = f v
   let fail exn = raise exn
   let catch f1 f2 = try f1 () with exn -> f2 exn
-    
+end    
+
+module SimpleTransport =
+struct
+  type 'a z = 'a UnitMonad.t
+  type fd = unit
   type strm = {
     buf : string;
     mutable i : int;
@@ -51,10 +56,8 @@ struct
     output_string s.outc str;
     flush s.outc
 
-  let switch_tls s = return ()
-    
   let close s = close_in s.inc; close_out s.outc
-    
+
 end
 
 module ID =
@@ -72,7 +75,7 @@ struct
   let find key t = fst (T.find t key)
 end
 
-module XMPPClient = Make (SimpleTransport) (IDCallback)
+module XMPPClient = Make (UnitMonad) (IDCallback)
 
 open XMPPClient
 
@@ -132,5 +135,11 @@ let _ =
   let sockaddr = Unix.ADDR_INET (inet_addr, port) in
   let data = () in
   let socket_data = SimpleTransport.open_connection sockaddr in
-  let xmpp = create data socket_data myjid in
+
+  let module Socket_module = struct type t = SimpleTransport.socket
+                                    let socket = socket_data
+                                    module T = SimpleTransport
+  end in
+
+  let xmpp = create data (module Socket_module : XMPPClient.Socket) myjid in
     XMPPClient.open_stream xmpp password session

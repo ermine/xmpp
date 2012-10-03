@@ -2,24 +2,6 @@
  * (c) 2004-2010 Anastasia Gornostaeva
  *)
 
-module type TRANSPORT =
-sig
-  type 'a t
-  val return : 'a -> 'a t
-  val fail : exn -> 'a t
-  val (>>=) : 'a t -> ('a -> 'b t) -> 'b t
-  val catch : (unit -> 'a t) -> (exn -> 'a t) -> 'a t
-
-  type socket
-  val can_tls : bool
-  val can_compress : bool
-  val open_connection : Unix.sockaddr -> socket t
-  val get : socket -> char option t
-  val send : socket -> string -> unit t
-  val switch_tls : socket -> unit t
-  val close : socket -> unit t
-end
-
 open Unix
 
 module SimpleTransport =

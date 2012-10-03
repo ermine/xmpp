@@ -97,15 +97,10 @@ sig
       
 end
 
-module Make (T : TRANSPORT) (IDCallback : IDCALLBACK) =
+module Make (M : MONAD) (IDCallback : IDCALLBACK) =
 struct
-  open T
+  include M
 
-  type 'a t = 'a T.t
-  let (>>=) = T.(>>=)
-  let return = T.return
-  let fail = T.fail
-    
   exception Error of string
   exception StreamError of StreamError.t
   exception MalformedStanza
@@ -145,8 +140,17 @@ struct
     | IQRequest of iq_request
     | IQResponse of iq_response
 
+
+  module type Socket =
+  sig
+    type t
+    val socket : t
+    module T : TRANSPORT with type socket = t
+                         and type 'a z = 'a M.t
+  end
+      
   type 'a session_data = {
-    socket : T.socket;
+    socket : (module Socket);
     mutable sid : int;
     xmllang : string;
     mutable iq_response :
@@ -218,6 +222,10 @@ struct
         (id, from, to_, kind, lang)
     ) (None, None, None, None, None) attrs
       
+  let send session_data v =
+    let module S = (val session_data.socket : Socket) in
+      S.T.send S.socket v
+          
   let make_iq_request session_data ?jid_from ?jid_to ?lang request callback =
     session_data.sid <- session_data.sid + 1;
     let id =
@@ -232,7 +240,7 @@ struct
     let attrs = make_stanza_attrs ~id ~kind ?jid_from ?jid_to ?lang () in
       session_data.iq_response <-
         IDCallback.add id callback session_data.iq_response;
-      T.send session_data.socket
+      send session_data
         (Xmlstream.stanza_serialize session_data.ser
            (make_element (ns_client, "iq") attrs [el]))
         
@@ -333,7 +341,7 @@ struct
     ) x ["body", body;
          "subject", subject;
          "thread", thread] in
-      T.send session_data.socket
+      send session_data
         (Xmlstream.stanza_serialize session_data.ser
            (make_element (ns_client, "message") attrs els))
         
@@ -456,7 +464,7 @@ struct
         ["show", (maybe string_of_show show);
          "status", status;
          "priority", (maybe string_of_int priority)] in
-      T.send session_data.socket
+      send session_data
         (Xmlstream.stanza_serialize session_data.ser
            (make_element (ns_client, "presence") attrs els))
         
@@ -464,7 +472,7 @@ struct
     let ns = get_namespace qname in
     let error = make_error ~ns ?text ?lang condition in
     let newattrs = make_stanza_attrs_reply ~kind:"error" attrs in
-      T.send session_data.socket
+      send session_data
         (Xmlstream.stanza_serialize session_data.ser
            (make_element qname newattrs (error::els)))
         
@@ -532,7 +540,7 @@ struct
                          ?jid_from:jid_to ?jid_to:jid_from ())
                       [of_error ns_client err]
               in
-                T.send session_data.socket (Xmlstream.stanza_serialize
+                send session_data (Xmlstream.stanza_serialize
                                               session_data.ser xml)
         )
           
@@ -590,13 +598,13 @@ struct
           session_data (ns_xmpp_sasl, "success") step2_success;
         register_stanza_handler
           session_data (ns_xmpp_sasl, "failure") step2_failure;
-        T.send session_data.socket
+        send session_data
           (Xmlstream.stanza_serialize session_data.ser
              (make_element (ns_xmpp_sasl, "response") [] [Xmlcdata resp]))
     and step2_challenge session_data _attrs els =
       unregister_stanza_handler session_data (ns_xmpp_sasl, "challenge");
 		  Sasl.sasl_digest_rspauth (collect_cdata els);
-      T.send session_data.socket
+      send session_data
         (Xmlstream.stanza_serialize session_data.ser
            (make_element (ns_xmpp_sasl, "response") [] []))
     and step2_failure session_data _attrs els =
@@ -613,7 +621,7 @@ struct
 
     in
       register_stanza_handler session_data (ns_xmpp_sasl, "challenge") step1;
-      T.send session_data.socket
+      send session_data
         (Xmlstream.stanza_serialize session_data.ser
            (make_element (ns_xmpp_sasl, "auth")
               [make_attr "mechanism" "DIGEST-MD5"] []))
@@ -637,7 +645,7 @@ struct
           unregister_stanza_handler session_data (ns_xmpp_sasl, "success");
 		      nextstep session_data
         );
-      T.send session_data.socket
+      send session_data
         (Xmlstream.stanza_serialize session_data.ser
            (make_element (ns_xmpp_sasl, "auth")
               [make_attr "mechanism" "PLAIN"] [Xmlcdata sasl_data]))
@@ -697,7 +705,7 @@ struct
         let p = get_first_element els in
 	        raise (AuthFailure (get_name (get_qname p)))
       );
-    T.send session_data.socket
+    send session_data
       (Xmlstream.stanza_serialize session_data.ser
          (make_element (ns_xmpp_tls, "starttls") [] []))
 
@@ -714,12 +722,12 @@ struct
             | None -> false
             | Some el ->
               if mem_child (ns_xmpp_tls, "required") el then
-                if T.can_tls then
-                  true
-                else
+                if not use_tls then
                   raise (Error "TLS is required")
+                else
+                  true
               else
-                T.can_tls && use_tls
+                use_tls
         in
           if use_tls then
             starttls session_data password
@@ -729,7 +737,7 @@ struct
     return ()
       
   let close_stream session_data =
-    T.send session_data.socket
+    send session_data
       (Xmlstream.stream_end session_data.ser (ns_streams, "stream"))
       
   let stream_stanza session_data (qname, attrs, els) =
@@ -758,32 +766,43 @@ struct
   let stream_end () =
     return ()
       
-  let open_stream session_data ?(use_tls=false) ?(use_compress=false)
+  let open_stream
+      session_data
+      ?(tls_module : (unit -> (module Socket) M.t) option)
       password session_handler =
-    let rec parsing () =
-      catch
-        (fun () ->
-          let module X = Xmlstream.XmlStream (T) in
-            T.send session_data.socket
-              (Xmlstream.stream_header session_data.ser
-                 (ns_streams, "stream")
-                 [make_attr "to" session_data.myjid.domain;
-                  make_attr "version" "1.0"]) >>= fun () ->
-                X.parse stream_start (stream_stanza session_data)
-                stream_end session_data.socket
-        )
-        (function
-          | XMLReset reason -> (
-            match reason with
-              | NormalReset -> parsing ()
-              | StartTLS -> T.switch_tls session_data.socket >>= parsing
-              | Session -> return ()
+    let rec parsing session_data =
+      let module S = (val session_data.socket : Socket) in
+        catch
+          (fun () ->
+            let module X = Xmlstream.XmlStream (M)(S.T) in
+              send session_data
+                (Xmlstream.stream_header session_data.ser
+                   (ns_streams, "stream")
+                   [make_attr "to" session_data.myjid.domain;
+                    make_attr "version" "1.0"]) >>= fun () ->
+            X.parse stream_start (stream_stanza session_data)
+              stream_end S.socket
           )
-          | exn -> fail exn
-        )
+          (function
+            | XMLReset reason -> (
+              match reason with
+                | NormalReset -> parsing session_data
+                | StartTLS -> (
+                  match tls_module with
+                    | None -> assert false
+                    | Some f -> f () >>= fun tls_module ->
+                      parsing {session_data with socket = tls_module}
+                )
+                | Session -> return ()
+            )
+            | exn -> fail exn
+          )
     in
-      start_stream session_data ~use_tls ~use_compress password >>=
-        parsing >>= fun () ->
-    session_handler session_data >>= parsing
+      start_stream session_data
+        ~use_tls:(match tls_module with | None -> false | Some _ -> true)
+        password >>= fun () ->
+        parsing session_data >>= fun () ->
+      session_handler session_data >>= fun () ->
+      parsing session_data
 end
   
