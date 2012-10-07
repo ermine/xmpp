@@ -57,16 +57,6 @@ struct
     in
       aux_send 0
 
-(*
-  let switch_tls s =
-    Ssl.init ();
-    let ctx = Ssl.create_context Ssl.TLSv1 Ssl.Client_context in
-    let fd = s.fd in
-      Lwt_unix.ssl_connect fd ctx >>= fun newsocket ->
-    s.socket <- newsocket;
-      return ()
-*)
-        
   let close s =
     Lwt_unix.close s.fd
 
@@ -206,7 +196,6 @@ let _ =
     with Failure("inet_addr_of_string") ->
       (Unix.gethostbyname server).Unix.h_addr_list.(0) in
   let sockaddr = Unix.ADDR_INET (inet_addr, port) in
-  let data = () in
     Lwt_main.run (
       PlainSocket.open_connection sockaddr >>= fun socket_data ->
       let module Socket_module = struct type t = PlainSocket.socket
@@ -221,9 +210,12 @@ let _ =
         end in
           return (module TLS_module : XMPPClient.Socket)
       in
-        create data (module Socket_module : XMPPClient.Socket) myjid >>=
-          fun xmpp ->
-      XMPPClient.open_stream xmpp ~tls_module:make_tls password session
+        XMPPClient.open_stream
+          ~user_data:()
+          ~myjid
+          ~plain_socket:(module Socket_module : XMPPClient.Socket)
+          ~tls_socket:make_tls
+          ~password session
     )
   
     

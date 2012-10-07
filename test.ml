@@ -133,7 +133,6 @@ let _ =
     with Failure("inet_addr_of_string") ->
       (Unix.gethostbyname server).Unix.h_addr_list.(0) in
   let sockaddr = Unix.ADDR_INET (inet_addr, port) in
-  let data = () in
   let socket_data = SimpleTransport.open_connection sockaddr in
 
   let module Socket_module = struct type t = SimpleTransport.socket
@@ -141,5 +140,8 @@ let _ =
                                     module T = SimpleTransport
   end in
 
-  let xmpp = create data (module Socket_module : XMPPClient.Socket) myjid in
-    XMPPClient.open_stream xmpp password session
+    XMPPClient.open_stream
+      ~user_data:()
+      ~myjid
+      ~plain_socket:(module Socket_module : XMPPClient.Socket)
+      ~password session

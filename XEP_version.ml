@@ -5,12 +5,10 @@
  * Version: 1.1
  *)
 
-open Xml
-open XMPP
-open StanzaError
-
 module Make (X : XMPP.S) =
 struct
+  open Xml
+  open StanzaError
   open X
 
   let ns_version = Some "jabber:iq:version"

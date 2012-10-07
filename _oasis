@@ -23,13 +23,13 @@ Library erm_xmpp
               JID,
 #              Roster,
 #              XEP_disco,
-#              XEP_last, 
-#              XEP_muc, 
-#              XEP_stats, 
-#              XEP_time, 
-#              XEP_vcard, 
-              XEP_version
-#              XEP_xdata
+              XEP_last, 
+              XEP_muc, 
+              XEP_stats, 
+              XEP_time, 
+              XEP_vcard, 
+              XEP_version,
+              XEP_xdata
   BuildDepends: erm_xml, cryptokit (>= 1.5)
 
 Executable test

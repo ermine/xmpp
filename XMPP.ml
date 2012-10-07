@@ -51,6 +51,8 @@ sig
 
   type 'a session_data
 
+  val get_myjid : 'a session_data -> JID.t
+
   val make_iq_request :
     'a session_data ->
     ?jid_from:JID.t ->
@@ -93,7 +95,43 @@ sig
     ?body:Xml.cdata ->
     ?subject:Xml.cdata ->
     ?thread:Xml.cdata -> ?x:Xml.element list -> unit -> unit t
+
+  type presence_type =
+      Probe
+    | Subscribe
+    | Subscribed
+    | Unsubscribe
+    | Unsubscribed
+    | Unavailable
+  val string_of_presence_type : presence_type -> string
+  type presence_show = ShowChat | ShowAway | ShowDND | ShowXA
+  val string_of_show : presence_show -> string
+  type presence_content = {
+    presence_type : presence_type option;
+    show : presence_show option;
+    status : string option;
+    priority : int option;
+  }
       
+  type presence_stanza = presence_content stanza
+  val parse_presence :
+    callback:('a session_data -> presence_content stanza -> unit t) ->
+    callback_error:('a session_data ->
+                    ?id:id ->
+                    ?jid_from:JID.t ->
+                    ?jid_to:id -> ?lang:id -> StanzaError.t -> unit t) ->
+    'a session_data ->
+    Xml.attribute list -> Xml.element list -> unit t
+  val send_presence :
+    'a session_data ->
+    ?id:Xml.cdata ->
+    ?jid_from:JID.t ->
+    ?jid_to:JID.t ->
+    ?kind:presence_type ->
+    ?lang:Xml.cdata ->
+    ?show:presence_show ->
+    ?status:Xml.cdata ->
+    ?priority:int -> ?x:Xml.element list -> unit -> unit t
 end
 
 module Make (M : MONAD) (IDCallback : IDCALLBACK) =
@@ -151,7 +189,6 @@ struct
   type 'a session_data = {
     socket : (module Socket);
     mutable sid : int;
-    xmllang : string;
     mutable iq_response :
       (iq_response -> string option -> string option -> string option -> unit ->
        unit t) IDCallback.t;
@@ -168,6 +205,8 @@ struct
       
   let string_of_option opt = match opt with None -> "" | Some v -> v
   let maybe f = function None -> None | Some v -> Some (f v)
+
+  let get_myjid session_data = session_data.myjid
 
   let make_stanza_attrs ?id ?jid_from ?jid_to ?kind ?lang () =
     List.fold_left
@@ -273,13 +312,13 @@ struct
       
   type message_stanza = message_content stanza
       
-  let parse_message ~callback ~callback_error t attrs els =
+  let parse_message ~callback ~callback_error session_data attrs els =
     let id, jid_from, jid_to, kind, lang = parse_stanza_attrs attrs in
     let jid_from = maybe JID.of_string jid_from in
       if kind = Some "error" then
         let err = StanzaError.parse_error
           (get_element (ns_client, "error") els) in
-          callback_error t ?id ?jid_from ?jid_to ?lang err
+          callback_error session_data ?id ?jid_from ?jid_to ?lang err
       else      
         let kind =
           match kind with
@@ -324,7 +363,7 @@ struct
           x = x
         }
         in
-          callback t message_stanza
+          callback session_data message_stanza
             
   let send_message session_data ?id ?jid_from ?jid_to ?kind ?lang
       ?body ?subject ?thread ?(x=[]) () =
@@ -381,13 +420,13 @@ struct
 
   type presence_stanza = presence_content stanza
 
-  let parse_presence ~callback ~callback_error t attrs els =
+  let parse_presence ~callback ~callback_error session_data attrs els =
     let id, jid_from, jid_to, kind, lang = parse_stanza_attrs attrs in
     let jid_from = maybe JID.of_string jid_from in
       if kind = Some "error" then
         let err = StanzaError.parse_error
           (get_element (ns_client, "error") els) in
-          callback_error t ?id ?jid_from ?jid_to ?lang err
+          callback_error session_data ?id ?jid_from ?jid_to ?lang err
       else      
         let kind =
           match kind with
@@ -446,7 +485,7 @@ struct
           x = x
         }
         in
-          callback t presence_stanza
+          callback session_data presence_stanza
             
   let send_presence session_data ?id ?jid_from ?jid_to ?kind ?lang
       ?show ?status ?priority ?(x=[]) () =
@@ -673,21 +712,6 @@ struct
       else
         fail (AuthError "no known SASL method")
       
-  let create user_data socket ?(lang="") myjid =
-    let ser = Xml.Serialization.create [ns_streams; ns_client] in
-    let () = Xmlstream.bind_prefix ser "stream" ns_streams in
-    return {
-      socket = socket;
-      sid = 1;
-      xmllang = lang;
-      iq_response = IDCallback.empty;
-      iq_request = IQRequestCallback.empty;
-      stanza_handlers = StanzaHandler.empty;
-      myjid = myjid;
-      ser = ser;
-      user_data = user_data
-    }
-        
   let starttls session_data password =
     register_stanza_handler session_data (ns_xmpp_tls, "proceed")
       (fun session_data _attrs els ->
@@ -764,11 +788,26 @@ struct
         
   let stream_end () =
     return ()
-      
+
   let open_stream
-      session_data
-      ?(tls_module : (unit -> (module Socket) M.t) option)
-      password session_handler =
+      ~myjid
+      ~user_data
+      ~(plain_socket : (module Socket))
+      ?(tls_socket : (unit -> (module Socket) M.t) option)
+      ?lang
+      ~password session_handler =
+    let ser = Xml.Serialization.create [ns_streams; ns_client] in
+    let () = Xmlstream.bind_prefix ser "stream" ns_streams in
+    let session_data = {
+      socket = plain_socket;
+      sid = 1;
+      iq_response = IDCallback.empty;
+      iq_request = IQRequestCallback.empty;
+      stanza_handlers = StanzaHandler.empty;
+      myjid = myjid;
+      ser = ser;
+      user_data = user_data
+    } in
     let rec parsing session_data =
       let module S = (val session_data.socket : Socket) in
         catch
@@ -777,8 +816,12 @@ struct
               send session_data
                 (Xmlstream.stream_header session_data.ser
                    (ns_streams, "stream")
-                   [make_attr "to" session_data.myjid.domain;
-                    make_attr "version" "1.0"]) >>= fun () ->
+                   (make_attr "to" session_data.myjid.domain ::
+                      make_attr "version" "1.0" ::
+                      (match lang with
+                        | None -> []
+                        | Some v -> [make_attr ~ns:ns_xml "lang" v])))
+            >>= fun () ->
             X.parse stream_start (stream_stanza session_data)
               stream_end S.socket
           )
@@ -787,10 +830,10 @@ struct
               match reason with
                 | NormalReset -> parsing session_data
                 | StartTLS -> (
-                  match tls_module with
+                  match tls_socket with
                     | None -> assert false
-                    | Some f -> f () >>= fun tls_module ->
-                      parsing {session_data with socket = tls_module}
+                    | Some f -> f () >>= fun tls_socket ->
+                      parsing {session_data with socket = tls_socket}
                 )
                 | Session -> return ()
             )
@@ -798,7 +841,7 @@ struct
           )
     in
       start_stream session_data
-        ~use_tls:(match tls_module with | None -> false | Some _ -> true)
+        ~use_tls:(match tls_socket with | None -> false | Some _ -> true)
         password >>= fun () ->
         parsing session_data >>= fun () ->
       session_handler session_data >>= fun () ->

@@ -1,11 +1,14 @@
 (*
- *
+ * (c) 2004-2012 Anastasia Gornostaeva
  *)
 
-let ns_xdata = Some "jabber:x:data"
+module Make (X : XMPP.S) =
+struct
+  let ns_xdata = Some "jabber:x:data"
 
-let encode () =
-  ()
+  let encode () =
+    ()
     
-let decode el =
-  ()
+  let decode el =
+    ()
+end
