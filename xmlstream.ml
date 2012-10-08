@@ -40,10 +40,10 @@ struct
   let make_stream source =
     fun () -> D.decode_utf8 source
 
-  exception XmlError of exn
+  exception XmlError of string
 
   let error strm exn =
-    fail (XmlError exn)
+    fail (XmlError (Printexc.to_string exn))
 
   let next_char strm eof f =
     strm () >>= function
@@ -86,55 +86,64 @@ end
 
 module XmlStream (M: MONAD) (T : TRANSPORT with type 'a z = 'a M.t) =
 struct
+  type p = {
+    namespaces : (string, Xml.namespace) Hashtbl.t;
+    stack : (Xml.qname * Xml.attribute list * Xml.element list) Stack.t;
+    stack_ns : (Xml.qname * (Xml.namespace * Xml.prefix) list) Stack.t
+  }
+    
+  let create () = {
+    namespaces = Hashtbl.create 10;
+    stack = Stack.create ();
+    stack_ns = Stack.create ()
+  }
 
   module XmlParser = Xmllexer_generic.Make
     (IStream (M)(T))
     (Xmllexer.Encoding)
     (XmlStanza (M))
-    
+
+  let make_stream = XmlParser.S.make_stream
+  let make_lexer = XmlParser.make_lexer
+
   let (>>=) = M.(>>=)
 
   module XmlStanza = XmlStanza (M)
   open XmlStanza
 
-  let parse stream_start stanza stream_end strm =
-    let namespaces = Hashtbl.create 10 in
-    let stack = Stack.create () in
-    let stack_ns = Stack.create () in
+  let parse p next_token stream_start stanza stream_end strm =
     let add_child el =
-      let (name, attrs, els) = Stack.pop stack in
-        Stack.push (name, attrs, (el :: els)) stack
+      let (name, attrs, els) = Stack.pop p.stack in
+        Stack.push (name, attrs, (el :: els)) p.stack
     in
-    let strm = XmlParser.S.make_stream strm in
-    let next_token = XmlParser.make_lexer strm in
     let rec loop () =
       next_token () >>= function
         | Some t -> (
           match t with
             | StartTag (name, attrs, selfclosing) ->
               let qname, lnss, attrs =
-                parse_element_head namespaces name attrs in
-                if Stack.is_empty stack then 
+                parse_element_head p.namespaces name attrs in
+                if Stack.is_empty p.stack then 
                   if selfclosing then (
                     stream_start qname attrs >>= stream_end >>= fun () ->
-                    remove_namespaces namespaces lnss;
+                    remove_namespaces p.namespaces lnss;
                     loop ()
                   ) else (
-                    Stack.push (qname, attrs, []) stack;
-                    Stack.push (qname, lnss) stack_ns;
+                    Stack.push (qname, attrs, []) p.stack;
+                    Stack.push (qname, lnss) p.stack_ns;
                     stream_start qname attrs >>= loop
                   )
                 else if selfclosing then (
-                  remove_namespaces namespaces lnss;
-                  if Stack.length stack = 1 then
+                  remove_namespaces p.namespaces lnss;
+                  if Stack.length p.stack = 1 then
                     stanza (qname, attrs, []) >>= loop
                   else (
                     add_child (Xmlelement (qname, attrs, []));
                     loop ()
                     )
                   ) else (
-                  Stack.push (qname, attrs, []) stack;
-                  Stack.push  (qname, lnss) stack_ns;
+                  Stack.push (qname, attrs, []) p.stack;
+                  Stack.push  (qname, lnss) p.stack_ns;
                   loop ()
                 )
                   
@@ -143,15 +152,15 @@ struct
               loop ()
                 
             | EndTag _name ->
-              let (qname, lnss) = Stack.pop stack_ns in
-                remove_namespaces namespaces lnss;
-                let el = Stack.pop stack in
-                  if Stack.is_empty stack then
+              let (qname, lnss) = Stack.pop p.stack_ns in
+                remove_namespaces p.namespaces lnss;
+                let (q, a, els) = Stack.pop p.stack in
+                  if Stack.is_empty p.stack then
                     stream_end () >>= loop
-                  else if Stack.length stack = 1 then
-                    stanza el >>= loop
+                  else if Stack.length p.stack = 1 then
+                    stanza (q, List.rev a, List.rev els) >>= loop
                   else (
-                    add_child (Xmlelement el);
+                    add_child (Xmlelement (q, List.rev a, List.rev els));
                     loop ()
                   )
             | _ -> loop ()

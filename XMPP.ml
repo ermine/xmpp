@@ -600,9 +600,8 @@ struct
       (IQSet (make_element (ns_xmpp_session, "session") [] []))
       (fun ev _jid_from _jid_to _lang () ->
         match ev with
-          | IQResult _ -> return ()
+          | IQResult _ -> fail (XMLReset Session)
           | IQError _err -> fail (Error "session") (* todo *))
-      
       
   let make_bind session_data =
     make_iq_request session_data ~jid_to:(domain session_data.myjid)
@@ -810,21 +809,23 @@ struct
     } in
     let rec parsing session_data =
       let module S = (val session_data.socket : Socket) in
-        catch
-          (fun () ->
-            let module X = Xmlstream.XmlStream (M)(S.T) in
-              send session_data
-                (Xmlstream.stream_header session_data.ser
-                   (ns_streams, "stream")
-                   (make_attr "to" session_data.myjid.domain ::
-                      make_attr "version" "1.0" ::
-                      (match lang with
-                        | None -> []
-                        | Some v -> [make_attr ~ns:ns_xml "lang" v])))
-            >>= fun () ->
-            X.parse stream_start (stream_stanza session_data)
-              stream_end S.socket
-          )
+      let module X = Xmlstream.XmlStream (M)(S.T) in
+        send session_data
+          (Xmlstream.stream_header session_data.ser
+             (ns_streams, "stream")
+             (make_attr "to" session_data.myjid.domain ::
+                make_attr "version" "1.0" ::
+                (match lang with
+                  | None -> []
+                  | Some v -> [make_attr ~ns:ns_xml "lang" v])))
+      >>= fun () ->
+      let p = X.create () in
+      let strm = X.make_stream S.socket in
+      let next_token = X.make_lexer strm in
+      let rec loop p session_data =
+        catch (fun () ->
+          X.parse p next_token
+            stream_start (stream_stanza session_data) stream_end strm)
           (function
             | XMLReset reason -> (
               match reason with
@@ -835,16 +836,17 @@ struct
                     | Some f -> f () >>= fun tls_socket ->
                       parsing {session_data with socket = tls_socket}
                 )
-                | Session -> return ()
+                | Session -> session_handler session_data >>= fun () ->
+                  loop p session_data
             )
             | exn -> fail exn
           )
+      in
+        loop p session_data
     in
       start_stream session_data
         ~use_tls:(match tls_socket with | None -> false | Some _ -> true)
         password >>= fun () ->
-        parsing session_data >>= fun () ->
-      session_handler session_data >>= fun () ->
-      parsing session_data
+        parsing session_data
 end
   
