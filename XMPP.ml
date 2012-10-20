@@ -7,13 +7,6 @@ open Xmlstream
 open StanzaError
 open JID
 
-type reset_reason =
-  | StartTLS
-  | NormalReset
-  | Session
-
-exception XMLReset of reset_reason
-
 type id = string
 
 module type IDCALLBACK =
@@ -134,9 +127,10 @@ sig
     ?priority:int -> ?x:Xml.element list -> unit -> unit t
 end
 
-module Make (M : MONAD) (IDCallback : IDCALLBACK) =
+module Make (M : MONAD) (XmlParser : Xmlstream.S) (IDCallback : IDCALLBACK) =
 struct
   include M
+  module X = XmlParser (M)
 
   exception Error of string
   exception StreamError of StreamError.t
@@ -182,12 +176,17 @@ struct
   sig
     type t
     val socket : t
+    val read : t -> string -> int -> int -> int M.t
+    val write : t -> string -> unit M.t
+(*      
     module T : TRANSPORT with type socket = t
                          and type 'a z = 'a M.t
+*)
   end
       
   type 'a session_data = {
-    socket : (module Socket);
+    mutable socket : (module Socket);
+    p : X.p;
     mutable sid : int;
     mutable iq_response :
       (iq_response -> string option -> string option -> string option -> unit ->
@@ -262,7 +261,7 @@ struct
       
   let send session_data v =
     let module S = (val session_data.socket : Socket) in
-      S.T.send S.socket v
+      S.write S.socket v
           
   let make_iq_request session_data ?jid_from ?jid_to ?lang request callback =
     session_data.sid <- session_data.sid + 1;
@@ -595,15 +594,15 @@ struct
               with Not_found -> return ()
         )
           
-  let make_session session_data =
+  let make_session session_data session_handler =
     make_iq_request session_data ~jid_from:session_data.myjid
       (IQSet (make_element (ns_xmpp_session, "session") [] []))
       (fun ev _jid_from _jid_to _lang () ->
         match ev with
-          | IQResult _ -> fail (XMLReset Session)
+          | IQResult _ -> session_handler session_data
           | IQError _err -> fail (Error "session") (* todo *))
       
-  let make_bind session_data =
+  let make_bind session_data session_handler =
     make_iq_request session_data ~jid_to:(domain session_data.myjid)
       (IQSet (make_element (ns_xmpp_bind, "bind") []
                 [make_simple_cdata (ns_xmpp_bind, "resource")
@@ -614,7 +613,7 @@ struct
             let myjid = get_cdata
               (get_subelement (ns_xmpp_bind, "jid") el) in
               session_data.myjid <- JID.of_string myjid;
-              make_session session_data
+              make_session session_data session_handler
           | IQResult None
           | IQError _ ->
             raise (Error "bind")
@@ -688,7 +687,7 @@ struct
               [make_attr "mechanism" "PLAIN"] [Xmlcdata sasl_data]))
         
         
-  let sasl_auth session_data features password  =
+  let sasl_auth session_data features lang password  session_handler =
     let mechanisms = get_element (ns_xmpp_sasl, "mechanisms") features in
     let mels = get_subelements (ns_xmpp_sasl, "mechanism") mechanisms in
     let m = List.map get_cdata mels in
@@ -698,11 +697,19 @@ struct
           unregister_stanza_handler session_data (ns_streams, "features");
           register_stanza_handler session_data (ns_client, "iq") process_iq;
           if mem_qname (ns_xmpp_bind, "bind") els then
-            make_bind session_data
+            make_bind session_data session_handler
           else
             raise (Error "no bind")
         );
-      fail (XMLReset NormalReset)
+      X.reset session_data.p None;
+      send session_data
+        (Xmlstream.stream_header session_data.ser
+           (ns_streams, "stream")
+           (make_attr "to" session_data.myjid.domain ::
+              make_attr "version" "1.0" ::
+              (match lang with
+                | None -> []
+                | Some v -> [make_attr ~ns:ns_xml "lang" v])))
     in    
       if List.mem "DIGEST-MD5" m then
         sasl_digest session_data password nextstep
@@ -711,14 +718,23 @@ struct
       else
         fail (AuthError "no known SASL method")
       
-  let starttls session_data password =
+  let starttls session_data tls_module lang password session_handler =
     register_stanza_handler session_data (ns_xmpp_tls, "proceed")
       (fun session_data _attrs els ->
         unregister_stanza_handler session_data (ns_xmpp_tls, "proceed");
         unregister_stanza_handler session_data (ns_xmpp_tls, "failure");
         register_stanza_handler session_data (ns_streams, "features")
-          (fun session_data _attrs els -> sasl_auth session_data els password);
-        fail (XMLReset StartTLS);
+          (fun session_data _attrs els ->
+            sasl_auth session_data els lang password session_handler);
+        tls_module session_data >>= fun () ->
+        send session_data
+            (Xmlstream.stream_header session_data.ser
+               (ns_streams, "stream")
+               (make_attr "to" session_data.myjid.domain ::
+                  make_attr "version" "1.0" ::
+                  (match lang with
+                    | None -> []
+                    | Some v -> [make_attr ~ns:ns_xml "lang" v])))
       );
     register_stanza_handler session_data (ns_xmpp_tls, "failure")
       (fun session_data _attrs els ->
@@ -731,30 +747,27 @@ struct
       (Xmlstream.stanza_serialize session_data.ser
          (make_element (ns_xmpp_tls, "starttls") [] []))
 
-  let start_stream session_data
-      ?(use_tls=false) ?(use_compress=false)  password =
+  let start_stream session_data ?tls ?compress lang password session_handler =
     register_stanza_handler session_data (ns_streams, "features")
       (fun session_data _attrs els ->
         unregister_stanza_handler session_data (ns_streams, "features");
         let tls_el =
           try Some (get_element (ns_xmpp_tls, "starttls") els)
           with Not_found -> None in
-        let use_tls =
           match tls_el with
-            | None -> false
+            | None -> sasl_auth session_data els lang password session_handler
             | Some el ->
               if mem_child (ns_xmpp_tls, "required") el then
-                if not use_tls then
-                  raise (Error "TLS is required")
-                else
-                  true
+                match tls with
+                  | None -> raise (Error "TLS is required")
+                  | Some m ->
+                    starttls session_data m lang password session_handler
               else
-                use_tls
-        in
-          if use_tls then
-            starttls session_data password
-          else
-            sasl_auth session_data els password
+                match tls with
+                  | None ->
+                    sasl_auth session_data els lang password session_handler
+                  | Some m ->
+                    starttls session_data m lang password session_handler
       );
     return ()
       
@@ -788,6 +801,25 @@ struct
   let stream_end () =
     return ()
 
+  let create_session_data plain_socket myjid user_data =
+    let ser = Xml.Serialization.create [ns_streams; ns_client] in
+    let () = Xmlstream.bind_prefix ser "stream" ns_streams in
+    let read buf start len =
+      let module S = (val plain_socket : Socket) in
+        S.read S.socket buf start len
+    in
+      {
+        socket = plain_socket;
+        p = X.create read;
+        sid = 1;
+        iq_response = IDCallback.empty;
+        iq_request = IQRequestCallback.empty;
+        stanza_handlers = StanzaHandler.empty;
+        myjid = myjid;
+        ser = ser;
+        user_data = user_data
+      }
+      
   let open_stream
       ~myjid
       ~user_data
@@ -795,58 +827,54 @@ struct
       ?(tls_socket : (unit -> (module Socket) M.t) option)
       ?lang
       ~password session_handler =
-    let ser = Xml.Serialization.create [ns_streams; ns_client] in
-    let () = Xmlstream.bind_prefix ser "stream" ns_streams in
-    let session_data = {
-      socket = plain_socket;
-      sid = 1;
-      iq_response = IDCallback.empty;
-      iq_request = IQRequestCallback.empty;
-      stanza_handlers = StanzaHandler.empty;
-      myjid = myjid;
-      ser = ser;
-      user_data = user_data
-    } in
-    let rec parsing session_data =
-      let module S = (val session_data.socket : Socket) in
-      let module X = Xmlstream.XmlStream (M)(S.T) in
-        send session_data
-          (Xmlstream.stream_header session_data.ser
-             (ns_streams, "stream")
-             (make_attr "to" session_data.myjid.domain ::
-                make_attr "version" "1.0" ::
-                (match lang with
-                  | None -> []
-                  | Some v -> [make_attr ~ns:ns_xml "lang" v])))
-      >>= fun () ->
-      let p = X.create () in
-      let strm = X.make_stream S.socket in
-      let next_token = X.make_lexer strm in
-      let rec loop p session_data =
-        catch (fun () ->
-          X.parse p next_token
-            stream_start (stream_stanza session_data) stream_end strm)
-          (function
-            | XMLReset reason -> (
-              match reason with
-                | NormalReset -> parsing session_data
-                | StartTLS -> (
-                  match tls_socket with
-                    | None -> assert false
-                    | Some f -> f () >>= fun tls_socket ->
-                      parsing {session_data with socket = tls_socket}
-                )
-                | Session -> session_handler session_data >>= fun () ->
-                  loop p session_data
-            )
-            | exn -> fail exn
-          )
-      in
-        loop p session_data
-    in
-      start_stream session_data
-        ~use_tls:(match tls_socket with | None -> false | Some _ -> true)
-        password >>= fun () ->
-        parsing session_data
+    let session_data = create_session_data plain_socket myjid user_data in
+      send session_data
+        (Xmlstream.stream_header session_data.ser
+           (ns_streams, "stream")
+           (make_attr "to" session_data.myjid.domain ::
+              make_attr "version" "1.0" ::
+              (match lang with
+                | None -> []
+                | Some v -> [make_attr ~ns:ns_xml "lang" v]))) >>= fun () ->
+    start_stream session_data
+      ?tls:(match tls_socket with
+        | None -> None
+        | Some socket -> Some (fun session_data ->
+          socket () >>= fun socket ->
+          session_data.socket <- socket;
+          let read buf start len =
+            let module S = (val socket : Socket) in
+              S.read S.socket buf start len
+          in
+            X.reset session_data.p (Some read);
+            return ()
+        ))
+      lang password session_handler >>=
+      fun () ->
+      X.parse session_data.p
+        stream_start (stream_stanza session_data) stream_end
+
+
+(*
+  let open_stream2 
+      ~myjid
+      ~user_data
+      ~(plain_socket : (module Socket))
+      ?(tls_socket : (unit -> (module Socket) M.t) option)
+      ?lang
+      ~password session_handler =
+    let session_data = create_session_data plain_socket myjid user_data in
+      send session_data
+        (Xmlstream.stream_header session_data.ser
+           (ns_streams, "stream")
+           (make_attr "to" session_data.myjid.domain ::
+              make_attr "version" "1.0" ::
+              (match lang with
+                | None -> []
+                | Some v -> [make_attr ~ns:ns_xml "lang" v]))) >>= fun () ->
+    start_stream session_data ?tls:tls_socket lang password session_handler >>=
+      fun () ->
+      X.parse session_data.p
+        stream_start (stream_stanza session_data) stream_end
+*)
 end
-  

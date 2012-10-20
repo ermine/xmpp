@@ -8,48 +8,29 @@ struct
 
   type fd = Lwt_unix.file_descr
 
-  type strm = {
-    buf : string;
-    mutable i : int;
-    mutable len : int
-  }
-  type socket = {
-    fd : fd;
-    strm : strm;
-  }
-  let get_fd s = s.fd
+  type socket = fd
+
+  let get_fd fd = fd
 
   let open_connection sockaddr =
     let fd = Lwt_unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
       Lwt_unix.connect fd sockaddr >>= fun () ->
-    return {fd = fd;
-            strm = { buf = String.create 8192; i = 0; len = 0};
-           }
+    return fd
 
-  let get s =
-    if s.strm.i < s.strm.len then
-      let c = s.strm.buf.[s.strm.i] in
-        s.strm.i <- s.strm.i + 1;
-        return (Some c)
-    else
-      Lwt_unix.read s.fd s.strm.buf 0 8192 >>=
-        (fun size ->
-          if size = 0 then
-            return None
-          else (
-            print_string "IN: "; print_endline (String.sub s.strm.buf 0 size);
-            s.strm.len <- size;
-            s.strm.i <- 1;
-            return (Some s.strm.buf.[0])
-          )
-        )
+  let read fd buf start len =
+    Lwt_unix.read fd buf start len >>=
+      (fun size ->
+        if size > 0 then
+          print_string "IN: "; print_endline (String.sub buf start size);
+        return size
+      )
 
-  let send s str =
+  let write fd str =
     print_string "OUT: ";
     print_endline str;
     let len = String.length str in
     let rec aux_send start =
-        Lwt_unix.write s.fd str start (len - start) >>= fun sent ->
+      Lwt_unix.write fd str start (len - start) >>= fun sent ->
     if sent = 0 then
       return ()
     else
@@ -57,8 +38,8 @@ struct
     in
       aux_send 0
 
-  let close s =
-    Lwt_unix.close s.fd
+  let close fd =
+    Lwt_unix.close fd
 
 end
 
@@ -70,36 +51,20 @@ struct
 
   type fd = Lwt_unix.file_descr
 
-  type strm = {
-    buf : string;
-    mutable i : int;
-    mutable len : int
-  }
   type socket = {
     fd : fd;
     socket : Lwt_ssl.socket;
-    strm : strm;
   }
 
-  let get s =
-    if s.strm.i < s.strm.len then
-      let c = s.strm.buf.[s.strm.i] in
-        s.strm.i <- s.strm.i + 1;
-        return (Some c)
-    else
-      Lwt_ssl.read s.socket s.strm.buf 0 8192 >>=
-        (fun size ->
-          if size = 0 then
-            return None
-          else (
-            print_string "IN: "; print_endline (String.sub s.strm.buf 0 size);
-            s.strm.len <- size;
-            s.strm.i <- 1;
-            return (Some s.strm.buf.[0])
-          )
-        )
+  let read s buf start len =
+    Lwt_ssl.read s.socket buf start len >>=
+      (fun size ->
+        if size > 0 then
+          print_string "IN: "; print_endline (String.sub buf start size);
+        return size
+      )
 
-  let send s str =
+  let write s str =
     print_string "OUT: ";
     print_endline str;
     let len = String.length str in
@@ -119,7 +84,6 @@ struct
     return {
       fd;
       socket;
-      strm = { buf = String.create 8192; i = 0; len = 0};
     }
         
   let close s =
@@ -134,7 +98,7 @@ struct
 end
 module IDCallback = Map.Make(ID)
 
-module XMPPClient = XMPP.Make (Lwt) (IDCallback)
+module XMPPClient = XMPP.Make (Lwt) (Xmlstream.XmlStream) (IDCallback)
 
 open XMPPClient
 
@@ -200,13 +164,13 @@ let _ =
       PlainSocket.open_connection sockaddr >>= fun socket_data ->
       let module Socket_module = struct type t = PlainSocket.socket
                                         let socket = socket_data
-                                        module T = PlainSocket
+                                        include PlainSocket
       end in
       let make_tls () =
         TLSSocket.switch (PlainSocket.get_fd socket_data) >>= fun socket_data ->
         let module TLS_module = struct type t = TLSSocket.socket
                                        let socket = socket_data
-                                       module T = TLSSocket
+                                       include TLSSocket
         end in
           return (module TLS_module : XMPPClient.Socket)
       in

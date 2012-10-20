@@ -30,7 +30,7 @@ Library erm_xmpp
               XEP_vcard, 
               XEP_version,
               XEP_xdata
-  BuildDepends: erm_xml, cryptokit (>= 1.5)
+  BuildDepends: erm_xml (>= 0.3), cryptokit (>= 1.5)
 
 Executable test
   Path: .
@@ -46,6 +46,13 @@ Executable lwt_test
   CompiledObject: best
   MainIs: lwt_test.ml  
   BuildDepends: erm_xmpp, lwt, lwt.ssl, erm_treap
+
+Executable test_ie
+  Path: .
+  Install: false
+  CompiledObject: best
+  MainIs: test_ie.ml
+  BuildDepends: erm_xmpp, erm_treap  
 
 # Document api
 #   Title:      API reference

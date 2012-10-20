@@ -60,7 +60,7 @@ struct
   let find key t = fst (T.find t key)
 end
 
-module XMPPClient = Make (UnitMonad) (Xmlstream.XmlStream) (IDCallback)
+module XMPPClient = Make (UnitMonad) (Xmlstream.XmlStreamIE) (IDCallback)
 
 open XMPPClient
 
@@ -104,7 +104,47 @@ let session t =
   register_stanza_handler t (ns_client, "presence")
     (parse_presence ~callback:presence_callback ~callback_error:presence_error)
   
-let _ =
+open Xml
+open JID
+
+let open_stream
+    ~myjid
+    ~user_data
+    ~(plain_socket : (module Socket))
+    ?(tls_socket : (unit -> (module XMPPClient.Socket) UnitMonad.t) option)
+    ?lang
+    ~password session_handler =
+  let session_data = create_session_data plain_socket myjid user_data in
+    send session_data
+      (Xmlstream.stream_header session_data.ser
+         (ns_streams, "stream")
+         (make_attr "to" session_data.XMPPClient.myjid.domain ::
+            make_attr "version" "1.0" ::
+            (match lang with
+              | None -> []
+              | Some v -> [make_attr ~ns:ns_xml "lang" v]))) >>= fun () ->
+  start_stream session_data
+    ?tls:(match tls_socket with
+      | None -> None
+      | Some socket -> Some (fun session_data ->
+        socket () >>= fun socket ->
+        session_data.socket <- socket;
+        let read buf start len =
+          let module S = (val socket : Socket) in
+            S.read S.socket buf start len
+        in
+          X.reset session_data.p (Some read);
+          return ()
+      ))
+    lang password session_handler >>=
+    fun () ->
+    let rec loop () =
+      X.parse session_data.p
+        stream_start (stream_stanza session_data) stream_end >>= loop
+    in
+      catch loop (function End_of_file -> return ())
+
+let () =
   let server = Sys.argv.(1)
   and username = Sys.argv.(2)
   and password = Sys.argv.(3)
@@ -124,9 +164,8 @@ let _ =
                                     let socket = socket_data
                                     include SimpleTransport
   end in
-
-    XMPPClient.open_stream
+    open_stream
       ~user_data:()
       ~myjid
       ~plain_socket:(module Socket_module : XMPPClient.Socket)
-      ~password session
+      ~password session;
