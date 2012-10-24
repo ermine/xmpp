@@ -145,7 +145,7 @@ let session t =
   register_stanza_handler t (ns_client, "presence")
     (parse_presence ~callback:presence_callback ~callback_error:presence_error);
   return ()
-  
+
 let _ =
   let server = Sys.argv.(1)
   and username = Sys.argv.(2)
@@ -174,12 +174,14 @@ let _ =
         end in
           return (module TLS_module : XMPPClient.Socket)
       in
-        XMPPClient.open_stream
+        XMPPClient.setup_session
           ~user_data:()
           ~myjid
           ~plain_socket:(module Socket_module : XMPPClient.Socket)
           ~tls_socket:make_tls
-          ~password session
+          ~password session >>=
+          (fun session_data -> XMPPClient.parse session_data >>= fun () ->
+            let module S = (val session_data.socket : Socket) in
+              S.close S.socket
+          )
     )
-  
-    

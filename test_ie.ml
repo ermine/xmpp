@@ -41,7 +41,9 @@ struct
     output_string s.outc str;
     flush s.outc
 
-  let close s = close_in s.inc; close_out s.outc
+  let close s =
+    print_endline "closing socket";
+    close_out s.outc
 
 end
 
@@ -103,7 +105,7 @@ let session t =
     (parse_message ~callback:message_callback ~callback_error:message_error);
   register_stanza_handler t (ns_client, "presence")
     (parse_presence ~callback:presence_callback ~callback_error:presence_error)
-  
+
 open Xml
 open JID
 
@@ -140,9 +142,14 @@ let open_stream
     fun () ->
     let rec loop () =
       X.parse session_data.p
-        stream_start (stream_stanza session_data) stream_end >>= loop
+        stream_start (stream_stanza session_data) (stream_end session_data) >>=
+        loop
     in
-      catch loop (function End_of_file -> return ())
+      catch loop (function exn ->
+        let module S = (val session_data.socket : Socket) in
+          S.close S.socket;
+          fail exn
+      )
 
 let () =
   let server = Sys.argv.(1)
@@ -160,12 +167,27 @@ let () =
   let sockaddr = Unix.ADDR_INET (inet_addr, port) in
   let socket_data = SimpleTransport.open_connection sockaddr in
 
-  let module Socket_module = struct type t = SimpleTransport.socket
-                                    let socket = socket_data
-                                    include SimpleTransport
-  end in
-    open_stream
+  let module Socket_module =
+      struct
+        type t = SimpleTransport.socket
+        let socket = socket_data
+        include SimpleTransport
+      end
+  in
+    XMPPClient.setup_session
       ~user_data:()
       ~myjid
       ~plain_socket:(module Socket_module : XMPPClient.Socket)
-      ~password session;
+      ~password session >>= fun session_data ->
+    let rec loop () =
+      X.parse session_data.p
+        stream_start (stream_stanza session_data) (stream_end session_data) >>=
+        loop
+    in
+      catch loop (function
+        | End_of_file ->
+          let module S = (val session_data.socket : Socket) in
+            S.close S.socket
+        | exn ->
+          fail exn
+      )

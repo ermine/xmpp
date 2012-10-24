@@ -41,7 +41,7 @@ struct
     output_string s.outc str;
     flush s.outc
 
-  let close s = close_in s.inc; close_out s.outc
+  let close s = close_in s.inc
 
 end
 
@@ -103,7 +103,7 @@ let session t =
     (parse_message ~callback:message_callback ~callback_error:message_error);
   register_stanza_handler t (ns_client, "presence")
     (parse_presence ~callback:presence_callback ~callback_error:presence_error)
-  
+    
 let _ =
   let server = Sys.argv.(1)
   and username = Sys.argv.(2)
@@ -120,13 +120,20 @@ let _ =
   let sockaddr = Unix.ADDR_INET (inet_addr, port) in
   let socket_data = SimpleTransport.open_connection sockaddr in
 
-  let module Socket_module = struct type t = SimpleTransport.socket
-                                    let socket = socket_data
-                                    include SimpleTransport
-  end in
-
-    XMPPClient.open_stream
+  let module Socket_module =
+      struct
+        type t = SimpleTransport.socket
+        let socket = socket_data
+        include SimpleTransport
+      end
+  in
+    XMPPClient.setup_session
       ~user_data:()
       ~myjid
       ~plain_socket:(module Socket_module : XMPPClient.Socket)
-      ~password session
+      ~password session >>= fun session_data ->
+      XMPPClient.parse session_data >>=
+      (fun () ->
+        let module S = (val session_data.socket : Socket) in
+          S.close S.socket
+      )

@@ -17,10 +17,8 @@ module IStream (M : MONAD) =
 struct
   include M
 
-  type source = string -> int -> int -> int t
-
   type stream = {
-    read : source;
+    read : string -> int -> int -> int M.t;
     buf : string;
     mutable i : int;
     mutable len : int;
@@ -209,12 +207,11 @@ end
 module type S = functor (M : MONAD) ->
 sig
   type p
-  type source = string -> int -> int -> int M.t
-  val create : source -> p
+  val create : (string -> int -> int -> int M.t) -> p
   val parse : p -> (Xml.qname -> Xml.attribute list -> unit M.t) ->
     (Xml.qname * Xml.attribute list * Xml.element list -> unit M.t) ->
     (unit -> unit M.t) -> unit M.t
-  val reset : p -> source option -> unit
+  val reset : p -> (string -> int -> int -> int M.t) option -> unit
 end
   
 module XmlStream (M : MONAD) =
@@ -235,14 +232,12 @@ struct
     mutable strm : XmlParser.S.stream;
   }
 
-  type source = I.source
-    
   let create read = {
     namespaces = Hashtbl.create 10;
     stack = Stack.create ();
     stack_ns = Stack.create ();
     state = XmlParser.create_state ();
-    strm = XmlParser.S.make_stream read
+    strm = I.make_stream read
   }
 
   let reset p read =
@@ -252,7 +247,7 @@ struct
     XmlParser.reset p.state;
     match read with
       | None -> ()
-      | Some v -> p.strm <- XmlParser.S.make_stream v
+      | Some v -> p.strm <- I.make_stream v
 
   let (>>=) = M.(>>=)
 
@@ -275,7 +270,7 @@ struct
                   if selfclosing then (
                     stream_start qname attrs >>= stream_end >>= fun () ->
                     remove_namespaces p.namespaces lnss;
-                    loop ()
+                    M.return ()
                   ) else (
                     Stack.push (qname, attrs, []) p.stack;
                     Stack.push (qname, lnss) p.stack_ns;
@@ -304,7 +299,7 @@ struct
                 remove_namespaces p.namespaces lnss;
                 let (q, a, els) = Stack.pop p.stack in
                   if Stack.is_empty p.stack then
-                    stream_end () >>= loop
+                    stream_end () >>= fun () -> M.return ()
                   else if Stack.length p.stack = 1 then
                     stanza (q, List.rev a, List.rev els) >>= loop
                   else (
@@ -323,30 +318,19 @@ module IterStream =
 struct
   include XmllexerE.IterMonad
 
-  type source = XmllexerE.IterMonad.input
-
-  type stream = {
-    mutable line : int;
-    mutable col : int;
-    mutable decoder : source -> int option t;
-    source : source
-  }
-
+  type stream = input -> int option t
+      
   let set_decoder encname strm = ()
 
-  let make_stream source =
-    { line = 0;
-      col = 0;
-      decoder = get;
-      source = source
-    }
+  let make_stream () = get
 
   let error strm exn = fail exn
 
   let next_char strm eof f =
-    strm.decoder strm.source >>= function
+    Continue (fun source -> strm source >>= function
       | Some u -> f u
       | None -> eof ()
+    )
 end
 
 
@@ -366,8 +350,6 @@ struct
   open IE
   open X
 
-  type source = string -> int -> int -> int M.t
-
   type p = {
     namespaces : (string, Xml.namespace) Hashtbl.t;
     stack : (Xml.qname * Xml.attribute list * Xml.element list) Stack.t;
@@ -375,7 +357,8 @@ struct
     state : XmlParser.state;
     strm : IterStream.stream;
     mutable read : string -> int -> int -> int M.t;
-    mutable cont : IE.input -> X.data option IE.t
+    mutable cont : IE.input -> X.token IE.t;
+    source : IE.input
   }
     
   let reset p read =
@@ -395,79 +378,77 @@ struct
       let (name, attrs, els) = Stack.pop p.stack in
         Stack.push (name, attrs, (el :: els)) p.stack
     in
-    let rec process_token = function
-      | StartTag (name, attrs, selfclosing) ->
-        let qname, lnss, attrs =
-          parse_element_head p.namespaces name attrs in
-          if Stack.is_empty p.stack then 
-            if selfclosing then (
-              stream_start qname attrs >>= stream_end >>= fun () ->
+    let rec loop = function
+      | Return (Some t) -> (
+        match t with
+          | StartTag (name, attrs, selfclosing) ->
+            let qname, lnss, attrs =
+              parse_element_head p.namespaces name attrs in
+              if Stack.is_empty p.stack then 
+                if selfclosing then (
+                  stream_start qname attrs >>= stream_end >>= fun () ->
+                  remove_namespaces p.namespaces lnss;
+                  loop (Return None)
+                ) else (
+                  Stack.push (qname, attrs, []) p.stack;
+                  Stack.push (qname, lnss) p.stack_ns;
+                  stream_start qname attrs >>= fun () ->
+                  loop (XmlParser.lexer p.state p.strm)
+                )
+              else if selfclosing then (
+                remove_namespaces p.namespaces lnss;
+                if Stack.length p.stack = 1 then
+                  stanza (qname, attrs, []) >>= fun () ->
+                loop (XmlParser.lexer p.state p.strm)
+                else (
+                  add_child (Xmlelement (qname, attrs, []));
+                  loop (XmlParser.lexer p.state p.strm)
+                )
+              ) else (
+                Stack.push (qname, attrs, []) p.stack;
+                Stack.push  (qname, lnss) p.stack_ns;
+                loop (XmlParser.lexer p.state p.strm)
+              )
+          | Text text ->
+            add_child (Xmlcdata text);
+            loop (XmlParser.lexer p.state p.strm)
+          | EndTag _name ->
+            let (qname, lnss) = Stack.pop p.stack_ns in
               remove_namespaces p.namespaces lnss;
-              return (XmlParser.lexer p.state p.strm)
-            ) else (
-              Stack.push (qname, attrs, []) p.stack;
-              Stack.push (qname, lnss) p.stack_ns;
-              stream_start qname attrs >>= fun () ->
-              return (XmlParser.lexer p.state p.strm)
-            )
-          else if selfclosing then (
-            remove_namespaces p.namespaces lnss;
-            if Stack.length p.stack = 1 then
-              stanza (qname, attrs, []) >>= fun () ->
-            return (XmlParser.lexer p.state p.strm)
-            else (
-              add_child (Xmlelement (qname, attrs, []));
-              return (XmlParser.lexer p.state p.strm)
-            )
-          ) else (
-            Stack.push (qname, attrs, []) p.stack;
-            Stack.push  (qname, lnss) p.stack_ns;
-            return (XmlParser.lexer p.state p.strm)
-          )
-      | Text text ->
-        add_child (Xmlcdata text);
-        return (XmlParser.lexer p.state p.strm)
-      | EndTag _name ->
-        let (qname, lnss) = Stack.pop p.stack_ns in
-          remove_namespaces p.namespaces lnss;
-          let (q, a, els) = Stack.pop p.stack in
-            if Stack.is_empty p.stack then
-              stream_end () >>= fun () -> return (XmlParser.lexer p.state p.strm)
-            else if Stack.length p.stack = 1 then
-              stanza (q, List.rev a, List.rev els) >>=
-                fun () -> return (XmlParser.lexer p.state p.strm)
-            else (
-              add_child (Xmlelement (q, List.rev a, List.rev els));
-              return (XmlParser.lexer p.state p.strm)
-            )
-      | _ -> return (XmlParser.lexer p.state p.strm)
-    and loop = function
-      | Return (Some t) -> process_token t >>= loop
+              let (q, a, els) = Stack.pop p.stack in
+                if Stack.is_empty p.stack then
+                  stream_end () >>= fun () -> loop (Return None)
+                else if Stack.length p.stack = 1 then
+                  stanza (q, List.rev a, List.rev els) >>= fun () ->
+                loop (XmlParser.lexer p.state p.strm)
+                else (
+                  add_child (Xmlelement (q, List.rev a, List.rev els));
+                  loop (XmlParser.lexer p.state p.strm)
+                )
+          | _ -> loop (XmlParser.lexer p.state p.strm)
+      )
       | Return None -> fail End_of_file
       | Continue cont ->
-        if is_empty p.strm.IterStream.source then (
+        if is_empty p.source then (
           p.cont <- cont;
           return ()
-        ) else
-          (return (cont p.strm.IterStream.source)) >>= loop
+        )
+        else
+          loop (cont p.source)
     in
-    let source = p.strm.IterStream.source in
-      if source.i < source.len then
-        return (p.cont source) >>= loop
-      else (
-        p.read source.buf 0 8192 >>= fun size ->
-        if size = 0 then
-          source.is_final <- true
-        else (
-          source.i <- 0;
-          source.len <- size
-        );
-        return (p.cont source) >>= loop
-      )
+      p.read p.source.buf 0 8192 >>= fun size ->
+    if size = 0 then
+      p.source.is_final <- true
+    else (
+      p.source.i <- 0;
+      p.source.len <- size
+    );
+      loop (p.cont p.source)
+
 
   let create read =
     let state = XmlParser.create_state () in
-    let strm = XmlParser.S.make_stream (IE.make_chunk 8192) in
+    let strm = IterStream.make_stream () in
       {
         namespaces = Hashtbl.create 10;
         stack = Stack.create ();
@@ -475,7 +456,8 @@ struct
         state = state;
         strm = strm;
         read = read;
-        cont = (fun _input -> XmlParser.lexer state strm)
+        cont = (fun source -> XmlParser.lexer state strm);
+        source = IE.make_chunk 8192
       }
 end
 

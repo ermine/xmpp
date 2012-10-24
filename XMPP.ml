@@ -178,10 +178,7 @@ struct
     val socket : t
     val read : t -> string -> int -> int -> int M.t
     val write : t -> string -> unit M.t
-(*      
-    module T : TRANSPORT with type socket = t
-                         and type 'a z = 'a M.t
-*)
+    val close : t -> unit M.t
   end
       
   type 'a session_data = {
@@ -798,8 +795,7 @@ struct
     else
       fail (Error "bad stream header")
         
-  let stream_end () =
-    return ()
+  let stream_end session_data () = return ()
 
   let create_session_data plain_socket myjid user_data =
     let ser = Xml.Serialization.create [ns_streams; ns_client] in
@@ -820,7 +816,7 @@ struct
         user_data = user_data
       }
       
-  let open_stream
+  let setup_session
       ~myjid
       ~user_data
       ~(plain_socket : (module Socket))
@@ -849,32 +845,9 @@ struct
             X.reset session_data.p (Some read);
             return ()
         ))
-      lang password session_handler >>=
-      fun () ->
-      X.parse session_data.p
-        stream_start (stream_stanza session_data) stream_end
+      lang password session_handler >>= fun () -> return session_data
 
-
-(*
-  let open_stream2 
-      ~myjid
-      ~user_data
-      ~(plain_socket : (module Socket))
-      ?(tls_socket : (unit -> (module Socket) M.t) option)
-      ?lang
-      ~password session_handler =
-    let session_data = create_session_data plain_socket myjid user_data in
-      send session_data
-        (Xmlstream.stream_header session_data.ser
-           (ns_streams, "stream")
-           (make_attr "to" session_data.myjid.domain ::
-              make_attr "version" "1.0" ::
-              (match lang with
-                | None -> []
-                | Some v -> [make_attr ~ns:ns_xml "lang" v]))) >>= fun () ->
-    start_stream session_data ?tls:tls_socket lang password session_handler >>=
-      fun () ->
-      X.parse session_data.p
-        stream_start (stream_stanza session_data) stream_end
-*)
+  let parse session_data =
+    X.parse session_data.p
+      stream_start (stream_stanza session_data) (stream_end session_data)
 end
