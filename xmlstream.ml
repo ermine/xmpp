@@ -160,9 +160,10 @@ struct
       is_final = false
     }
 
+
   exception XmlError of string
 
-  let error strm exn =
+  let error ?stream exn =
     fail (XmlError (Printexc.to_string exn))
 
   let next_char strm eof f =
@@ -207,6 +208,7 @@ end
 module type S = functor (M : MONAD) ->
 sig
   type p
+  exception XmlError of string
   val create : (string -> int -> int -> int M.t) -> p
   val parse : p -> (Xml.qname -> Xml.attribute list -> unit M.t) ->
     (Xml.qname * Xml.attribute list * Xml.element list -> unit M.t) ->
@@ -223,6 +225,15 @@ struct
     (XmlStanza (M))
 
   type stream = I.stream
+
+  exception Exn_msg = XmlParser.Exn_msg
+  exception Exn_EOF = XmlParser.Exn_EOF
+  exception Exn_ExpectedChar = XmlParser.Exn_ExpectedChar
+  exception Exn_ExpectedSpace = XmlParser.Exn_ExpectedSpace
+  exception Exn_CharToken = XmlParser.Exn_CharToken
+  exception Error_XMLDecl = XmlParser.Error_XMLDecl
+
+  exception XmlError = I.XmlError
 
   type p = {
     namespaces : (string, Xml.namespace) Hashtbl.t;
@@ -324,7 +335,10 @@ struct
 
   let make_stream () = get
 
-  let error strm exn = fail exn
+  exception XmlError of string
+
+  let error ?stream exn =
+    fail (XmlError (Printexc.to_string exn))
 
   let next_char strm eof f =
     Continue (fun source -> strm source >>= function
@@ -332,8 +346,6 @@ struct
       | None -> eof ()
     )
 end
-
-
 
 module XmlStreamIE (M : MONAD) =
 struct
@@ -349,6 +361,15 @@ struct
 
   open IE
   open X
+
+  exception Exn_msg = XmlParser.Exn_msg
+  exception Exn_EOF = XmlParser.Exn_EOF
+  exception Exn_ExpectedChar = XmlParser.Exn_ExpectedChar
+  exception Exn_ExpectedSpace = XmlParser.Exn_ExpectedSpace
+  exception Exn_CharToken = XmlParser.Exn_CharToken
+  exception Error_XMLDecl = XmlParser.Error_XMLDecl
+
+  exception XmlError = IterStream.XmlError
 
   type p = {
     namespaces : (string, Xml.namespace) Hashtbl.t;

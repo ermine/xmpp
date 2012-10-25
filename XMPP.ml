@@ -816,22 +816,15 @@ struct
         user_data = user_data
       }
       
-  let setup_session
-      ~myjid
-      ~user_data
-      ~(plain_socket : (module Socket))
-      ?(tls_socket : (unit -> (module Socket) M.t) option)
-      ?lang
-      ~password session_handler =
-    let session_data = create_session_data plain_socket myjid user_data in
-      send session_data
-        (Xmlstream.stream_header session_data.ser
-           (ns_streams, "stream")
-           (make_attr "to" session_data.myjid.domain ::
-              make_attr "version" "1.0" ::
-              (match lang with
-                | None -> []
-                | Some v -> [make_attr ~ns:ns_xml "lang" v]))) >>= fun () ->
+  let open_stream session_data ?tls_socket ?lang password session_handler =
+    send session_data
+      (Xmlstream.stream_header session_data.ser
+         (ns_streams, "stream")
+         (make_attr "to" session_data.myjid.domain ::
+            make_attr "version" "1.0" ::
+            (match lang with
+              | None -> []
+              | Some v -> [make_attr ~ns:ns_xml "lang" v]))) >>= fun () ->
     start_stream session_data
       ?tls:(match tls_socket with
         | None -> None
@@ -845,8 +838,19 @@ struct
             X.reset session_data.p (Some read);
             return ()
         ))
-      lang password session_handler >>= fun () -> return session_data
+      lang password session_handler
 
+  let setup_session
+      ~myjid
+      ~user_data
+      ~(plain_socket : (module Socket))
+      ?(tls_socket : (unit -> (module Socket) M.t) option)
+      ?lang
+      ~password session_handler =
+    let session_data = create_session_data plain_socket myjid user_data in
+    open_stream session_data ?tls_socket ?lang password session_handler
+    >>= fun () -> return session_data
+    
   let parse session_data =
     X.parse session_data.p
       stream_start (stream_stanza session_data) (stream_end session_data)
