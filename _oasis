@@ -1,6 +1,6 @@
 OASISFormat: 0.3
 Name:        erm_xmpp
-Version:     0.2
+Version:     0.3
 Authors:     Anastasia Gornostaeva
 Copyrights:  (C) 2004 Anastasia Gornostaeva
 License:     BSD3
@@ -9,12 +9,12 @@ Plugins:     DevFiles (0.3), META (0.3)
 BuildTools:  ocamlbuild
 
 Synopsis:    XMPP protocol implementation
-Description:
-  TODO
 
 Library erm_xmpp
-  Path:       .
-  Modules:    Uni_data, Uni_norm, Stringprep, 
+  Path:       src
+  Modules:    UTF8,
+              Xmpp_prep_tables,
+              Xmpp_prep,
               StreamError, 
               StanzaError, 
               Xmlstream, 
@@ -33,7 +33,7 @@ Library erm_xmpp
   BuildDepends: erm_xml (>= 0.3), cryptokit (>= 1.5)
 
 Executable test
-  Path: .
+  Path: tests
   Install: false
   Custom: true
   CompiledObject: best
@@ -41,14 +41,14 @@ Executable test
   BuildDepends: erm_xmpp, erm_treap
 
 Executable lwt_test
-  Path: .
+  Path: tests
   Install: false
   CompiledObject: best
   MainIs: lwt_test.ml  
   BuildDepends: erm_xmpp, lwt, lwt.ssl, erm_treap
 
 Executable test_ie
-  Path: .
+  Path: tests
   Install: false
   CompiledObject: best
   MainIs: test_ie.ml

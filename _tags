@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 6c9974180916b1117ef7da52e88f5d78)
+# DO NOT EDIT (digest: a12f4a2de6900edda9520ef8275462f0)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -14,30 +14,32 @@
 "_darcs": -traverse
 "_darcs": not_hygienic
 # Library erm_xmpp
-"erm_xmpp.cmxs": use_erm_xmpp
+"src/erm_xmpp.cmxs": use_erm_xmpp
+<src/*.ml{,i}>: pkg_erm_xml
+<src/*.ml{,i}>: pkg_cryptokit
 # Executable test
-<test.{native,byte}>: use_erm_xmpp
-<test.{native,byte}>: pkg_erm_treap
-<test.{native,byte}>: pkg_erm_xml
-<test.{native,byte}>: pkg_cryptokit
-<test.{native,byte}>: custom
+<tests/test.{native,byte}>: use_erm_xmpp
+<tests/test.{native,byte}>: pkg_erm_treap
+<tests/test.{native,byte}>: pkg_erm_xml
+<tests/test.{native,byte}>: pkg_cryptokit
+<tests/test.{native,byte}>: custom
 # Executable lwt_test
-<lwt_test.{native,byte}>: use_erm_xmpp
-<lwt_test.{native,byte}>: pkg_erm_treap
-<lwt_test.{native,byte}>: pkg_lwt
-<lwt_test.{native,byte}>: pkg_lwt.ssl
-<lwt_test.{native,byte}>: pkg_erm_xml
-<lwt_test.{native,byte}>: pkg_cryptokit
-<*.ml{,i}>: pkg_lwt
-<*.ml{,i}>: pkg_lwt.ssl
+<tests/lwt_test.{native,byte}>: use_erm_xmpp
+<tests/lwt_test.{native,byte}>: pkg_erm_treap
+<tests/lwt_test.{native,byte}>: pkg_lwt
+<tests/lwt_test.{native,byte}>: pkg_lwt.ssl
+<tests/lwt_test.{native,byte}>: pkg_erm_xml
+<tests/lwt_test.{native,byte}>: pkg_cryptokit
+<tests/*.ml{,i}>: pkg_lwt
+<tests/*.ml{,i}>: pkg_lwt.ssl
 # Executable test_ie
-<test_ie.{native,byte}>: use_erm_xmpp
-<test_ie.{native,byte}>: pkg_erm_treap
-<test_ie.{native,byte}>: pkg_erm_xml
-<test_ie.{native,byte}>: pkg_cryptokit
-<*.ml{,i}>: use_erm_xmpp
-<*.ml{,i}>: pkg_erm_treap
-<*.ml{,i}>: pkg_erm_xml
-<*.ml{,i}>: pkg_cryptokit
+<tests/test_ie.{native,byte}>: use_erm_xmpp
+<tests/test_ie.{native,byte}>: pkg_erm_treap
+<tests/test_ie.{native,byte}>: pkg_erm_xml
+<tests/test_ie.{native,byte}>: pkg_cryptokit
+<tests/*.ml{,i}>: use_erm_xmpp
+<tests/*.ml{,i}>: pkg_erm_treap
+<tests/*.ml{,i}>: pkg_erm_xml
+<tests/*.ml{,i}>: pkg_cryptokit
 # OASIS_STOP
-<sasl.ml>: syntax_camlp4o, pkg_camlp4
+<src/sasl.ml>: syntax_camlp4o, pkg_camlp4

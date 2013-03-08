@@ -1,8 +1,8 @@
 (*
- * (c) 2004-2010 Anastasia Gornostaeva
+ * (c) 2004-2013 Anastasia Gornostaeva
  *)
 
-exception InvalidJID
+exception MalformedJID
  
 type t = {
   node: string;
@@ -13,17 +13,57 @@ type t = {
   lresource: string
 }
 
-let of_string str =
+let nodeprep ?(strong=false) str =
+  try
+    let normalized =
+      if strong then (
+        if String.length str > 1023 then
+          raise MalformedJID;
+        Xmpp_prep.strong_nodeprep (UTF8.decode str)
+      ) else
+        Xmpp_prep.nodeprep (UTF8.decode str)
+    in
+      UTF8.encode normalized
+  with _ -> raise MalformedJID
+
+let nameprep ?(strong=false) str =
+  try
+    let normalized =
+      if strong then (
+        let len = String.length str in
+          if len < 1 || len > 1023 then
+            raise MalformedJID;
+          Xmpp_prep.strong_nameprep (UTF8.decode str)
+      ) else
+        Xmpp_prep.nameprep (UTF8.decode str)
+    in
+      UTF8.encode normalized
+  with _ -> raise MalformedJID
+
+let resourceprep ?(strong=false) str =
+  try
+    let normalized =
+      if strong then (
+        if String.length str > 1023 then
+          raise MalformedJID;
+        Xmpp_prep.strong_resourceprep (UTF8.decode str)
+      ) else
+        Xmpp_prep.resourceprep (UTF8.decode str)
+    in
+      UTF8.encode normalized
+  with _ -> raise MalformedJID
+
+let of_string ?strong str =
   let bare_jid, resource = 
     try
 	    let r = String.index str '/' in
 	      String.sub str 0 r,
-	    String.sub str (r+1) (String.length str - (r+1))
+	      String.sub str (r+1) (String.length str - (r+1))
     with Not_found -> str, ""
   in
   let node, domain =
     if bare_jid = "" then
-      raise InvalidJID
+      raise MalformedJID
     else
       try
 	      let s = String.index bare_jid '@' in
@@ -36,9 +76,9 @@ let of_string str =
 	    node = node;
 	    domain = domain;
 	    resource = resource;
-	    lnode = Stringprep.nodeprep node;
-	    ldomain = Stringprep.nameprep domain; 
-	    lresource = Stringprep.resourceprep resource
+	    lnode = nodeprep ?strong node;
+	    ldomain = nameprep ?strong domain; 
+	    lresource = resourceprep ?strong resource
     }
       
 let bare_jid jid = 
@@ -75,15 +115,15 @@ let compare jid1 jid2 = Pervasives.compare
   (jid1.lnode, jid1.ldomain, jid1.lresource)
   (jid2.lnode, jid2.ldomain, jid2.lresource)
 
-let make_jid node domain resource =
+let make_jid ?strong node domain resource =
   {
     node = node;
-    lnode = Stringprep.nodeprep node;
+    lnode = nodeprep ?strong node;
     domain = domain;
-    ldomain = Stringprep.nameprep domain;
+    ldomain = nameprep ?strong domain;
     resource = resource;
-    lresource = Stringprep.resourceprep resource
+    lresource = resourceprep ?strong resource
   }
   
-let replace_resource jid resource =
-  {jid with resource = resource; lresource = Stringprep.resourceprep resource}
+let replace_resource ?strong jid resource =
+  {jid with resource = resource; lresource = resourceprep ?strong resource}
