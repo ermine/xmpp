@@ -2082,6 +2082,7 @@ let _ =
     printf "let b_randal = 0b1000\n";
     printf "let b_l = 0b10000\n";
     printf "let casemap_max_idx = %d\n" (List.length blocks - 1);
+    printf "let prohibits_max_idx = %d\n" (List.length omg - 1);
     printf "\n\n";
 
     printf "let fmap = [|\n";

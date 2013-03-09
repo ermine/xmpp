@@ -200,5 +200,6 @@ let _ =
       printf "|]\n";
 
       printf "let dmap_max_idx = %d\n" (Array.length ar - 1);
-      printf "let comps_max_idx = %d\n" (List.length comps - 1)
+      printf "let comps_max_idx = %d\n" (List.length comps - 1);
+      printf "let comp_len = %d\n" (List.length comps)
         

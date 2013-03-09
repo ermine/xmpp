@@ -127,8 +127,6 @@ let compose_hangul ch1 ch2 =
           (* if neither case was true *)
           -1
 
-let comp_len = Array.length comp_map
-
 let composeTwo ch1 ch2 =
   let rec check_ch1 branch s e =
     if s > e then
@@ -213,8 +211,6 @@ let resourceprep ustr =
     nfkc (List.rev result)
   
 
-let prohibits_max_idx = Array.length prohibits - 1
-  
 (* Check prohibited symbols and bidi *)
 let check_prohibits p ustr =
   let rec aux_prohibit dir = function

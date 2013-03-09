@@ -12,6 +12,7 @@ let b_nodeprep_prohibit = 0b100
 let b_randal = 0b1000
 let b_l = 0b10000
 let casemap_max_idx = 675
+let prohibits_max_idx = 437
 
 
 let fmap = [|
@@ -8526,3 +8527,4 @@ let comp_map = [|
 |]
 let dmap_max_idx = 366
 let comps_max_idx = 52
+let comp_len = 53
