@@ -1,3 +1,8 @@
+(*
+ * (c) 2013 Anastasia Gornostaeva 
+ * Generated at 2013-03-09
+ *)
+
 let b_shift = 8
 let b_b1 = 0
 let b_mc = 1
@@ -6,6 +11,7 @@ let b_resourceprep_prohibit = 0b10
 let b_nodeprep_prohibit = 0b100
 let b_randal = 0b1000
 let b_l = 0b10000
+let casemap_max_idx = 675
 
 
 let fmap = [|
@@ -8518,3 +8524,5 @@ let comp_map = [|
       (12507, 12509);
   |]);
 |]
+let dmap_max_idx = 366
+let comps_max_idx = 52

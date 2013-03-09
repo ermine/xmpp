@@ -2,8 +2,6 @@ open Xmpp_prep_tables
 
 exception Error of string
   
-let casemap_max_idx = Array.length casemap - 1
-
 let rec get_bst arr x s e =
   if s > e || x < Array.unsafe_get (Array.unsafe_get arr s) 0 ||
     x > Array.unsafe_get (Array.unsafe_get arr e) 1 then
@@ -44,9 +42,6 @@ let get_b1 x =
           
 
 (* http://unicode.org/reports/tr15/ *)
-
-let dmap_max_idx = Array.length dmap - 1
-let comps_max_idx = Array.length comp_map - 1
 
 let hangulSBase = 0xAC00
 let hangulLBase = 0x1100
