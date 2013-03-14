@@ -20,9 +20,6 @@ struct
     outc : out_channel;
   }
 
-  let can_tls = false
-  let can_compress = false
-
   let open_connection sockaddr =
     let inc, outc = Unix.open_connection sockaddr in
       {inc;
@@ -113,10 +110,15 @@ let _ =
     if Array.length Sys.argv < 5 then 5222 else int_of_string Sys.argv.(4) in
 
   let myjid = JID.make_jid username server resource in
+  let server = JID.to_idn myjid in
   let inet_addr =
     try Unix.inet_addr_of_string server
     with Failure("inet_addr_of_string") ->
-      (Unix.gethostbyname server).Unix.h_addr_list.(0) in
+      try (Unix.gethostbyname server).Unix.h_addr_list.(0)
+      with Not_found ->
+        Printf.eprintf "Unable to resolve %s\n" server;
+        Pervasives.exit 1
+  in
   let sockaddr = Unix.ADDR_INET (inet_addr, port) in
   let socket_data = SimpleTransport.open_connection sockaddr in
 

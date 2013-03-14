@@ -31,3 +31,5 @@ val replace_resource : ?strong:bool -> t -> string -> t
 val nodeprep : ?strong:bool -> string -> string
 val nameprep : ?strong:bool -> string -> string
 val resourceprep : ?strong:bool -> string -> string
+
+val to_idn : t -> string

@@ -3,6 +3,7 @@
  *)
 
 exception MalformedJID
+exception MalformedDomain
  
 type t = {
   node: string;
@@ -127,3 +128,51 @@ let make_jid ?strong node domain resource =
   
 let replace_resource ?strong jid resource =
   {jid with resource = resource; lresource = resourceprep ?strong resource}
+
+let ace_prefix = "xn--"
+let contains_outside_ascii ustr =
+  List.exists (fun c -> c > 0x7F) ustr
+
+let rec split acc part = function
+  | [] -> if part = [] then List.rev acc else List.rev (List.rev part :: acc)
+  | x :: xs ->
+    if x = 46 then (* '.' *)
+      if part = [] then split acc [] xs else split (List.rev part::acc) [] xs
+    else
+      split acc (x::part) xs
+
+let to_idn jid =
+  (* already nameprepared *)
+  let ustr = UTF8.decode jid.ldomain in
+  let is_bad c =
+    c < 0x2D || (c > 0x2D && c < 0x30) || 
+      (c > 0x39 && c < 0x41) || (c > 0x5C && c < 0x61) || (c > 0x7C && c < 0x80)
+  in
+  let rec contains_bad = function
+    | [] -> false
+    | x :: [] -> x = 0x2D || is_bad x
+    | x :: xs -> if is_bad x then true else contains_bad xs
+  in
+  let parts = split [] [] ustr in
+  let eparts =
+    List.map (fun part ->
+      let bad =
+        match part with
+          | [] -> true
+          | x :: xs -> x = 0x2D || is_bad x || contains_bad xs
+      in
+        if bad then
+          raise MalformedDomain
+        else
+          if contains_outside_ascii part then
+            match part with
+              | 120::110::45::45 :: _ -> raise MalformedDomain
+              | _ -> ace_prefix ^ Punycode.encode (Array.of_list part)
+          else
+            let len = List.length part in
+              if len < 1 || len > 63 then
+                raise MalformedDomain
+              else
+                UTF8.encode part
+    ) parts in
+    String.concat "." eparts
