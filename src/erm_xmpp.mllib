@@ -1,8 +1,9 @@
 # OASIS_START
-# DO NOT EDIT (digest: 601cd6ad91fe5e3d3afb71b783f085b7)
+# DO NOT EDIT (digest: 2d4b9ffb8eb517a55459db651bdb936f)
 UTF8
 Xmpp_prep_tables
 Xmpp_prep
+Punycode
 StreamError
 StanzaError
 Xmlstream

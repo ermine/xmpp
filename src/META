@@ -1,6 +1,6 @@
 # OASIS_START
-# DO NOT EDIT (digest: 4bd5fd5057a700353c47720264d4679e)
-version = "0.3"
+# DO NOT EDIT (digest: b94252bb4cec7d50f13c0cf3772cf74a)
+version = "0.4"
 description = "XMPP protocol implementation"
 requires = "erm_xml cryptokit"
 archive(byte) = "erm_xmpp.cma"

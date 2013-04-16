@@ -243,16 +243,20 @@ struct
     mutable strm : XmlParser.S.stream;
   }
 
-  let create read = {
-    namespaces = Hashtbl.create 10;
-    stack = Stack.create ();
-    stack_ns = Stack.create ();
-    state = XmlParser.create_state ();
-    strm = I.make_stream read
-  }
+  let create read =
+    let p = {
+      namespaces = Hashtbl.create 10;
+      stack = Stack.create ();
+      stack_ns = Stack.create ();
+      state = XmlParser.create_state ();
+      strm = I.make_stream read
+    } in
+      Hashtbl.add p.namespaces "xml" ns_xml;
+      p
 
   let reset p read =
     Hashtbl.clear p.namespaces;
+    Hashtbl.add p.namespaces "xml" ns_xml;
     Stack.clear p.stack;
     Stack.clear p.stack_ns;
     XmlParser.reset p.state;
@@ -381,9 +385,10 @@ struct
     mutable cont : IE.input -> X.token IE.t;
     source : IE.input
   }
-    
+
   let reset p read =
     Hashtbl.clear p.namespaces;
+    Hashtbl.add p.namespaces "xml" ns_xml;
     Stack.clear p.stack;
     Stack.clear p.stack_ns;
     XmlParser.reset p.state;
@@ -470,16 +475,19 @@ struct
   let create read =
     let state = XmlParser.create_state () in
     let strm = IterStream.make_stream () in
-      {
-        namespaces = Hashtbl.create 10;
-        stack = Stack.create ();
-        stack_ns = Stack.create ();
-        state = state;
-        strm = strm;
-        read = read;
-        cont = (fun source -> XmlParser.lexer state strm);
-        source = IE.make_chunk 8192
-      }
+    let p = {
+      namespaces = Hashtbl.create 10;
+      stack = Stack.create ();
+      stack_ns = Stack.create ();
+      state = state;
+      strm = strm;
+      read = read;
+      cont = (fun source -> XmlParser.lexer state strm);
+      source = IE.make_chunk 8192
+    } in
+      Hashtbl.add p.namespaces "xml" ns_xml;
+      p
+
 end
 
 
