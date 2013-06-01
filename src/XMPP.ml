@@ -600,7 +600,7 @@ struct
           | IQError _err -> fail (Error "session") (* todo *))
       
   let make_bind session_data session_handler =
-    make_iq_request session_data ~jid_to:(domain session_data.myjid)
+    make_iq_request session_data 
       (IQSet (make_element (ns_xmpp_bind, "bind") []
                 [make_simple_cdata (ns_xmpp_bind, "resource")
                     session_data.myjid.resource]))
