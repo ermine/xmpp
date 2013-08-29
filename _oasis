@@ -35,6 +35,7 @@ Library erm_xmpp
 
 Executable test
   Path: tests
+  Build$: flag(tests)
   Install: false
   Custom: true
   CompiledObject: best
@@ -43,6 +44,7 @@ Executable test
 
 Executable lwt_test
   Path: tests
+  Build$: flag(tests)
   Install: false
   CompiledObject: best
   MainIs: lwt_test.ml  
@@ -50,11 +52,20 @@ Executable lwt_test
 
 Executable test_ie
   Path: tests
+  Build$: flag(tests)
   Install: false
   CompiledObject: best
   MainIs: test_ie.ml
   BuildDepends: erm_xmpp, erm_treap  
 
+Executable punycode_test
+  Path: tests
+  Build$: flag(tests)
+  Install: false
+  CompiledObject: best
+  MainIs: punycode_test.ml
+  BuildDepends: erm_xmpp, erm_treap  
+  
 # Document api
 #   Title:      API reference
 #   InstallDir: $docdir
