@@ -372,7 +372,7 @@ struct
       make_element (ns_muc_admin, "query") [] items
         
     let encode_item  ?actor ?reason ?affiliation ?jid ?nick ?role () =
-      make_element (ns_muc_user, "item")
+      make_element (ns_muc_admin, "item")
         (List.fold_left (fun acc (k,v) ->
           match v with
             | None -> acc
@@ -400,12 +400,12 @@ struct
            [(match actor with
              | None -> None
              | Some v ->
-               Some (make_element (ns_muc_user, "actor")
+               Some (make_element (ns_muc_admin, "actor")
                        [make_attr "jid" (string_of_jid v)] [])
             );
             (match reason with
               | None -> None
-              | Some v -> Some (make_simple_cdata (ns_muc_user, "reason") v))
+              | Some v -> Some (make_simple_cdata (ns_muc_admin, "reason") v))
            ])
         
     type item = {
